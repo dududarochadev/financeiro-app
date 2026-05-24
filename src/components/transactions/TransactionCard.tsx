@@ -103,7 +103,7 @@ export function TransactionCard({
           {isIncome ? '+' : '-'}
           {formatCurrency(Number(transaction.expected_amount))}
         </span>
-        {transaction.paid_amount && transaction.paid_amount !== transaction.expected_amount && (
+        {transaction.status === 'paid' && transaction.paid_amount != null && transaction.paid_amount !== transaction.expected_amount && (
           <span className="text-[11px] text-muted-foreground tabular-nums">
             Pago: {formatCurrency(Number(transaction.paid_amount))}
           </span>

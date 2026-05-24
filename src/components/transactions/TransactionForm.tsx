@@ -120,9 +120,9 @@ export function TransactionForm({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       {trigger ? (
-        <div onClick={() => setOpen(true)}>{trigger}</div>
+        <span onClick={() => setOpen(true)} className="contents">{trigger}</span>
       ) : (
-        <Button className="w-full gap-2" onClick={() => setOpen(true)}>
+        <Button className="flex-1 gap-2" onClick={() => setOpen(true)}>
           <Plus className="h-4 w-4" />
           Nova transação
         </Button>

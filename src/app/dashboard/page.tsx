@@ -177,6 +177,12 @@ export default function DashboardPage() {
                 year={year}
                 groups={groups}
                 onSubmit={createTransaction}
+                trigger={
+                  <Button className="flex-1 gap-2" variant="default">
+                    <Plus className="h-4 w-4" />
+                    Nova transação
+                  </Button>
+                }
               />
             </div>
 
