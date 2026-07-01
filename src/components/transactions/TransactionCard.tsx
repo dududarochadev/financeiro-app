@@ -11,6 +11,7 @@ import type { Transaction, RecurrenceEditScope } from '@/lib/types';
 interface TransactionCardProps {
   transaction: Transaction;
   onTogglePaid: (id: string, paidAmount?: number) => void;
+  onMarkPending: (id: string) => void;
   onEdit: (transaction: Transaction, scope?: RecurrenceEditScope) => void;
   onDelete: (id: string, scope?: RecurrenceEditScope) => Promise<boolean>;
 }
@@ -18,6 +19,7 @@ interface TransactionCardProps {
 export function TransactionCard({
   transaction,
   onTogglePaid,
+  onMarkPending,
   onEdit,
   onDelete,
 }: TransactionCardProps) {
@@ -69,7 +71,7 @@ export function TransactionCard({
           onClick={() =>
             isPending
               ? onTogglePaid(transaction.id, transaction.expected_amount)
-              : onTogglePaid(transaction.id, 0)
+              : onMarkPending(transaction.id)
           }
           aria-label={isPending ? 'Marcar como pago' : 'Reabrir'}
         >

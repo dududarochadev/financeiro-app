@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/components/layout/AuthProvider';
 import type { Wallet, WalletInput } from '@/lib/types';
 
@@ -10,23 +9,24 @@ export function useWallets() {
   const [selectedWallet, setSelectedWallet] = useState<Wallet | null>(null);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
-  const supabase = createClient();
 
   const fetchWallets = useCallback(async () => {
     if (!user) return;
-    const { data } = await supabase
-      .from('wallets')
-      .select('*')
-      .order('created_at', { ascending: true });
 
-    if (data) {
+    try {
+      const res = await fetch('/api/wallets');
+      if (!res.ok) throw new Error('Failed to fetch wallets');
+
+      const data = await res.json();
       setWallets(data);
       if (!selectedWallet && data.length > 0) {
         setSelectedWallet(data[0]);
       }
+    } catch (err) {
+      console.error('Error fetching wallets:', err);
     }
     setLoading(false);
-  }, [user, supabase, selectedWallet]);
+  }, [user, selectedWallet]);
 
   useEffect(() => {
     fetchWallets();
@@ -34,70 +34,74 @@ export function useWallets() {
 
   const createWallet = async (input: WalletInput): Promise<boolean> => {
     if (!user) return false;
-    const { data, error } = await supabase
-      .from('wallets')
-      .insert({
-        user_id: user.id,
-        name: input.name,
-        description: input.description ?? null,
-        color: input.color ?? '#6366f1',
-      })
-      .select()
-      .single();
 
-    if (error) {
-      console.error('Error creating wallet:', error);
-      return false;
-    }
-    if (data) {
+    try {
+      const res = await fetch('/api/wallets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
+
+      if (!res.ok) {
+        console.error('Error creating wallet:', await res.text());
+        return false;
+      }
+
+      const data = await res.json();
       setWallets((prev) => [...prev, data]);
       setSelectedWallet(data);
+      return true;
+    } catch (err) {
+      console.error('Error creating wallet:', err);
+      return false;
     }
-    return true;
   };
 
   const updateWallet = async (id: string, input: WalletInput): Promise<boolean> => {
-    const { error } = await supabase
-      .from('wallets')
-      .update({
-        name: input.name,
-        description: input.description ?? null,
-        color: input.color ?? '#6366f1',
-      })
-      .eq('id', id);
+    try {
+      const res = await fetch('/api/wallets', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...input }),
+      });
 
-    if (error) {
-      console.error('Error updating wallet:', error);
+      if (!res.ok) {
+        console.error('Error updating wallet:', await res.text());
+        return false;
+      }
+
+      const data = await res.json();
+      setWallets((prev) => prev.map((w) => (w.id === id ? data : w)));
+      if (selectedWallet?.id === id) {
+        setSelectedWallet(data);
+      }
+      return true;
+    } catch (err) {
+      console.error('Error updating wallet:', err);
       return false;
     }
-    setWallets((prev) =>
-      prev.map((w) =>
-        w.id === id
-          ? { ...w, ...input, color: input.color ?? w.color }
-          : w
-      )
-    );
-    if (selectedWallet?.id === id) {
-      setSelectedWallet((prev) => prev ? { ...prev, ...input, color: input.color ?? prev.color } : null);
-    }
-    return true;
   };
 
   const deleteWallet = async (id: string): Promise<boolean> => {
-    const { error } = await supabase
-      .from('wallets')
-      .delete()
-      .eq('id', id);
+    try {
+      const res = await fetch(`/api/wallets?id=${id}`, {
+        method: 'DELETE',
+      });
 
-    if (error) {
-      console.error('Error deleting wallet:', error);
+      if (!res.ok) {
+        console.error('Error deleting wallet:', await res.text());
+        return false;
+      }
+
+      setWallets((prev) => prev.filter((w) => w.id !== id));
+      if (selectedWallet?.id === id) {
+        setSelectedWallet(wallets.find((w) => w.id !== id) ?? null);
+      }
+      return true;
+    } catch (err) {
+      console.error('Error deleting wallet:', err);
       return false;
     }
-    setWallets((prev) => prev.filter((w) => w.id !== id));
-    if (selectedWallet?.id === id) {
-      setSelectedWallet(wallets.find((w) => w.id !== id) ?? null);
-    }
-    return true;
   };
 
   const switchWallet = (wallet: Wallet) => {
