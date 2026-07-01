@@ -120,8 +120,15 @@ export async function PATCH(request: Request) {
     const tx = ownerCheck.rows[0];
     const rootId = tx.template_id || id;
 
-    // Build SET clauses from updates
-    const setEntries = Object.entries(updates).filter(([_, v]) => v !== undefined);
+    // When scope != 'this', exclude per-occurrence structural fields
+    // so month/year aren't overwritten on all occurrences in the series
+    const structuralFields = new Set([
+      'month', 'year', 'installment_current', 'installment_total',
+      'template_id', 'wallet_id', 'user_id', 'paid_amount', 'paid_at',
+    ]);
+
+    const setEntries = Object.entries(updates)
+      .filter(([k, v]) => v !== undefined && (scope === 'this' || !structuralFields.has(k)));
     if (setEntries.length === 0) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
 
     const setClauses = setEntries.map(([key], i) => `"${key}" = $${i + 1}`);
