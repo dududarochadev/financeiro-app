@@ -249,7 +249,7 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
 
   const groupedTransactions: TransactionGroup[] = [
     ...new Set(transactions.map((t) => t.group)),
-  ].map((groupName) => {
+  ].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((groupName) => {
     const groupTransactions = transactions.filter((t) => t.group === groupName);
     return {
       name: groupName,

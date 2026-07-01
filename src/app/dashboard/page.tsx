@@ -22,6 +22,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Wallet, HandCoins, Plus, Eye, EyeOff, Table2 } from 'lucide-react';
 import type { Transaction, TransactionInput, RecurrenceEditScope } from '@/lib/types';
 
@@ -51,21 +58,23 @@ export default function DashboardPage() {
 
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [editingScope, setEditingScope] = useState<RecurrenceEditScope | undefined>(undefined);
+  const [editGroup, setEditGroup] = useState('');
+  const [editCustomGroup, setEditCustomGroup] = useState('');
   const [showPaid, setShowPaid] = useState(false);
   const [showWalletForm, setShowWalletForm] = useState(false);
 
-  // Collect unique groups
+  // Collect unique groups (sorted alphabetically for consistent ordering)
   const groups = [
     ...new Set([
       ...pendingTransactions.map((t) => t.group),
       ...paidTransactions.map((t) => t.group),
     ]),
-  ];
+  ].sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
-  // Group pending transactions
+  // Group pending transactions (sorted alphabetically for consistent ordering)
   const pendingGroups = [
     ...new Set(pendingTransactions.map((t) => t.group)),
-  ].map((groupName) => ({
+  ].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((groupName) => ({
     name: groupName,
     transactions: pendingTransactions.filter((t) => t.group === groupName),
     total: pendingTransactions
@@ -76,15 +85,18 @@ export default function DashboardPage() {
   const handleEdit = (tx: Transaction, scope?: RecurrenceEditScope) => {
     setEditingTx(tx);
     setEditingScope(scope);
+    setEditGroup(tx.group);
+    setEditCustomGroup('');
   };
 
   const handleEditSubmit = async (input: TransactionInput) => {
     if (!editingTx) return false;
+    const finalGroup = editGroup === '__custom__' ? editCustomGroup.trim() : editGroup;
     let ok: boolean;
     if (editingScope) {
-      ok = await updateTransactionScope(editingTx.id, editingScope, input);
+      ok = await updateTransactionScope(editingTx.id, editingScope, { ...input, group: finalGroup || editingTx.group });
     } else {
-      ok = await updateTransaction(editingTx.id, input);
+      ok = await updateTransaction(editingTx.id, { ...input, group: finalGroup || editingTx.group });
     }
     if (ok) {
       setEditingTx(null);
@@ -352,7 +364,6 @@ export default function DashboardPage() {
                   type: editingTx.type,
                   title: formData.get('title') as string,
                   expected_amount: parseFloat((formData.get('amount') as string).replace(',', '.')),
-                  group: formData.get('group') as string || editingTx.group,
                   month: editingTx.month,
                   year: editingTx.year,
                 });
@@ -381,11 +392,30 @@ export default function DashboardPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-group">Grupo</Label>
-                <Input
-                  id="edit-group"
-                  name="group"
-                  defaultValue={editingTx.group}
-                />
+                <Select
+                  value={editGroup}
+                  onValueChange={(v) => v && setEditGroup(v)}
+                >
+                  <SelectTrigger id="edit-group">
+                    <SelectValue placeholder="Selecione um grupo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups.map((g) => (
+                      <SelectItem key={g} value={g}>
+                        {g}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="__custom__">Outro (digitar)</SelectItem>
+                  </SelectContent>
+                </Select>
+                {editGroup === '__custom__' && (
+                  <Input
+                    value={editCustomGroup}
+                    onChange={(e) => setEditCustomGroup(e.target.value)}
+                    placeholder="Nome do novo grupo"
+                    className="mt-1"
+                  />
+                )}
               </div>
               <div className="flex gap-2">
                 <Button

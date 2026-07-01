@@ -79,7 +79,10 @@ export function TransactionForm({
   );
   const [loading, setLoading] = useState(false);
 
-  const allGroups = [...new Set([...DEFAULT_GROUPS, ...groups])];
+  const customGroups = [...new Set(groups.filter((g) => !DEFAULT_GROUPS.includes(g)))].sort(
+    (a, b) => a.localeCompare(b, 'pt-BR')
+  );
+  const allGroups = [...DEFAULT_GROUPS, ...customGroups];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
