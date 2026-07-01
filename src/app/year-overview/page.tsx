@@ -146,7 +146,7 @@ export default function YearOverviewPage() {
                     let groupTotal = 0;
                     return (
                       <tr key={`income-${group}`} className="bg-emerald-50/40 hover:bg-emerald-50/60">
-                        <td className="sticky left-0 bg-emerald-50/40 px-3 py-2 font-medium text-emerald-700 text-xs truncate max-w-[140px]">
+                        <td className="sticky left-0 bg-emerald-50/40 px-3 py-2 font-medium text-foreground text-xs truncate max-w-[140px]">
                           💰 {group}
                         </td>
                         {MONTHS.map((m) => {
@@ -173,12 +173,12 @@ export default function YearOverviewPage() {
                           }
 
                           return (
-                            <td key={m} className="px-2 py-2 text-right tabular-nums text-xs font-medium text-emerald-700">
+                            <td key={m} className="px-2 py-2 text-right tabular-nums text-xs font-medium text-foreground">
                               {formatCurrency(total)}
                             </td>
                           );
                         })}
-                        <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold text-emerald-700">
+                        <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold text-foreground">
                           {groupTotal > 0 ? formatCurrency(groupTotal) : '-'}
                         </td>
                       </tr>
@@ -188,18 +188,18 @@ export default function YearOverviewPage() {
                   {/* Income subtotal row */}
                   {incomeGroups.length > 1 && (
                     <tr className="bg-emerald-50/40 border-b border-emerald-200">
-                      <td className="sticky left-0 bg-emerald-50/40 px-3 py-2 font-semibold text-emerald-800 text-xs">
+                      <td className="sticky left-0 bg-emerald-50/40 px-3 py-2 font-semibold text-foreground text-xs">
                         📊 Total Receitas
                       </td>
                       {MONTHS.map((m) => {
                         const total = monthlySummaries[m - 1].income_total;
                         return (
-                          <td key={m} className="px-2 py-2 text-right tabular-nums text-xs font-semibold text-emerald-700">
+                          <td key={m} className="px-2 py-2 text-right tabular-nums text-xs font-semibold text-foreground">
                             {total > 0 ? formatCurrency(total) : '-'}
                           </td>
                         );
                       })}
-                      <td className="px-3 py-2 text-right tabular-nums text-xs font-bold text-emerald-700">
+                      <td className="px-3 py-2 text-right tabular-nums text-xs font-bold text-foreground">
                         {formatCurrency(yearTotal.income)}
                       </td>
                     </tr>
@@ -210,7 +210,7 @@ export default function YearOverviewPage() {
                     const monthMap = groupMonthMap.get(group);
                     let groupTotal = 0;
                     return (
-                      <tr key={group} className="hover:bg-muted/20">
+                      <tr key={group} className="bg-card hover:bg-muted/20">
                         <td className="sticky left-0 bg-card px-3 py-2 font-medium text-xs truncate max-w-[140px]">
                           {group}
                         </td>

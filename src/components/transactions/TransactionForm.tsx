@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, InfinityIcon } from 'lucide-react';
+import { Plus, InfinityIcon, CalendarDays } from 'lucide-react';
 import type { Transaction, TransactionInput, TransactionType } from '@/lib/types';
 
 interface TransactionFormProps {
@@ -64,6 +64,8 @@ export function TransactionForm({
   );
   const [group, setGroup] = useState(transaction?.group ?? 'Outros');
   const [customGroup, setCustomGroup] = useState('');
+  const [formMonth, setFormMonth] = useState(month);
+  const [formYear, setFormYear] = useState(year);
   const [dueDate, setDueDate] = useState(transaction?.due_date ?? '');
 
   // Recurrence mode: 'none' | 'installments' | 'monthly'
@@ -84,6 +86,14 @@ export function TransactionForm({
   );
   const allGroups = [...DEFAULT_GROUPS, ...customGroups];
 
+  const currentYear = new Date().getFullYear();
+  const yearOptions = Array.from({ length: 11 }, (_, i) => currentYear - 5 + i);
+
+  const MONTH_NAMES = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+  ];
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim() || !amount) return;
@@ -100,8 +110,8 @@ export function TransactionForm({
       expected_amount: parseFloat(amount.replace(',', '.')),
       group: finalGroup || 'Outros',
       due_date: dueDate || undefined,
-      month,
-      year,
+      month: formMonth,
+      year: formYear,
       recurrence_type: recurrenceMode === 'monthly' ? 'monthly' : 'none',
       installment_total: recurrenceMode === 'installments' && installments ? parseInt(installments) : undefined,
       installment_current: recurrenceMode === 'installments' && installments ? 1 : undefined,
@@ -217,6 +227,40 @@ export function TransactionForm({
                 className="mt-1"
               />
             )}
+          </div>
+
+          {/* Month / Year */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-2">
+              <Label>Mês</Label>
+              <Select value={String(formMonth)} onValueChange={(v) => v && setFormMonth(parseInt(v))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Mês" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTH_NAMES.map((name, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Ano</Label>
+              <Select value={String(formYear)} onValueChange={(v) => v && setFormYear(parseInt(v))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Ano" />
+                </SelectTrigger>
+                <SelectContent>
+                  {yearOptions.map((y) => (
+                    <SelectItem key={y} value={String(y)}>
+                      {y}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Due Date */}
