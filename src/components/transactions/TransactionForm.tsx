@@ -17,7 +17,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus } from 'lucide-react';
+import { Plus, InfinityIcon } from 'lucide-react';
 import type { Transaction, TransactionInput, TransactionType } from '@/lib/types';
 
 interface TransactionFormProps {
@@ -29,6 +29,8 @@ interface TransactionFormProps {
   onSubmit: (input: TransactionInput) => Promise<boolean>;
   trigger?: React.ReactNode;
 }
+
+type RecurrenceMode = 'none' | 'installments' | 'monthly';
 
 const DEFAULT_GROUPS = [
   'Alimentação',
@@ -63,9 +65,15 @@ export function TransactionForm({
   const [group, setGroup] = useState(transaction?.group ?? 'Outros');
   const [customGroup, setCustomGroup] = useState('');
   const [dueDate, setDueDate] = useState(transaction?.due_date ?? '');
-  const [isRecurring, setIsRecurring] = useState(
-    (transaction?.recurrence_type ?? 'none') === 'monthly'
-  );
+
+  // Recurrence mode: 'none' | 'installments' | 'monthly'
+  const initialMode: RecurrenceMode =
+    transaction?.installment_total && transaction.installment_total > 1
+      ? 'installments'
+      : transaction?.recurrence_type === 'monthly'
+        ? 'monthly'
+        : 'none';
+  const [recurrenceMode, setRecurrenceMode] = useState<RecurrenceMode>(initialMode);
   const [installments, setInstallments] = useState(
     transaction?.installment_total ? String(transaction.installment_total) : ''
   );
@@ -91,9 +99,9 @@ export function TransactionForm({
       due_date: dueDate || undefined,
       month,
       year,
-      recurrence_type: isRecurring && !installments ? 'monthly' : 'none',
-      installment_total: installments ? parseInt(installments) : undefined,
-      installment_current: installments ? 1 : undefined,
+      recurrence_type: recurrenceMode === 'monthly' ? 'monthly' : 'none',
+      installment_total: recurrenceMode === 'installments' && installments ? parseInt(installments) : undefined,
+      installment_current: recurrenceMode === 'installments' && installments ? 1 : undefined,
     };
 
     const ok = await onSubmit(input);
@@ -113,7 +121,7 @@ export function TransactionForm({
     setGroup('Outros');
     setCustomGroup('');
     setDueDate('');
-    setIsRecurring(false);
+    setRecurrenceMode('none');
     setInstallments('');
   };
 
@@ -219,36 +227,72 @@ export function TransactionForm({
             />
           </div>
 
-          {/* Recurring / Installment */}
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={isRecurring}
-                onChange={(e) => {
-                  setIsRecurring(e.target.checked);
-                  if (e.target.checked) setInstallments('');
-                }}
-                className="rounded border-muted-foreground"
-              />
-              Mensal
-            </label>
+          {/* Recurrence Mode */}
+          <div className="space-y-2">
+            <Label>Recorrência</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => { setRecurrenceMode('none'); setInstallments(''); }}
+                className={`rounded-lg border px-3 py-2 text-center text-xs font-medium transition-colors ${
+                  recurrenceMode === 'none'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:bg-muted/50'
+                }`}
+              >
+                <div className="text-sm">Avulso</div>
+                <div className="mt-0.5 text-[10px] opacity-70">Uma vez</div>
+              </button>
 
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="number"
-                min="2"
-                max="999"
-                value={installments}
-                onChange={(e) => {
-                  setInstallments(e.target.value);
-                  if (e.target.value) setIsRecurring(false);
-                }}
-                placeholder="Parcelas"
-                className="h-7 w-16 rounded border px-1 text-center text-sm"
-              />
-              <span>Parcelas</span>
-            </label>
+              <button
+                type="button"
+                onClick={() => { setRecurrenceMode('installments'); }}
+                className={`rounded-lg border px-3 py-2 text-center text-xs font-medium transition-colors ${
+                  recurrenceMode === 'installments'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:bg-muted/50'
+                }`}
+              >
+                <div className="text-sm">Parcelado</div>
+                <div className="mt-0.5 text-[10px] opacity-70">Nº fixo</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => { setRecurrenceMode('monthly'); setInstallments(''); }}
+                className={`rounded-lg border px-3 py-2 text-center text-xs font-medium transition-colors ${
+                  recurrenceMode === 'monthly'
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:bg-muted/50'
+                }`}
+              >
+                <div className="text-sm">Mensal</div>
+                <div className="mt-0.5 text-[10px] opacity-70">Sem fim</div>
+              </button>
+            </div>
+
+            {recurrenceMode === 'installments' && (
+              <div className="mt-2">
+                <Label htmlFor="installments" className="text-xs">Número de parcelas</Label>
+                <Input
+                  id="installments"
+                  type="number"
+                  min="2"
+                  max="999"
+                  value={installments}
+                  onChange={(e) => setInstallments(e.target.value)}
+                  placeholder="Ex: 12"
+                  className="mt-1"
+                />
+              </div>
+            )}
+
+            {recurrenceMode === 'monthly' && (
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <InfinityIcon className="h-3 w-3" />
+                <span>Repete todo mês — gerei 60 parcelas (5 anos). Novos meses serão criados automaticamente.</span>
+              </div>
+            )}
           </div>
 
           <Button type="submit" className="w-full" disabled={loading}>

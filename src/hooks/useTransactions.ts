@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/components/layout/AuthProvider';
-import type { Transaction, TransactionInput, MonthlySummary, TransactionGroup } from '@/lib/types';
+import type { Transaction, TransactionInput, MonthlySummary, TransactionGroup, RecurrenceEditScope } from '@/lib/types';
 
 interface UseTransactionsOptions {
   walletId?: string;
@@ -132,7 +132,7 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
       const occurrences: any[] = [];
       let occMonth = input.month + 1;
       let occYear = input.year;
-      let maxFuture = 12; // Generate up to 12 months ahead
+      const maxFuture = 60; // Generate up to 60 months ahead (5 years)
 
       for (let i = 0; i < maxFuture; i++) {
         while (occMonth > 12) {
@@ -243,6 +243,118 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
     return true;
   };
 
+  const deleteTransactionScope = async (id: string, scope: RecurrenceEditScope): Promise<boolean> => {
+    const tx = transactions.find((t) => t.id === id);
+    if (!tx) return false;
+
+    const now = new Date().toISOString();
+    const isPartOfSeries = !!(tx.template_id || (tx.installment_total && tx.installment_total > 1));
+
+    if (!isPartOfSeries || scope === 'this') {
+      return deleteTransaction(id);
+    }
+
+    const templateId = tx.template_id || tx.id;
+
+    if (scope === 'this_and_future') {
+      const { error: err1 } = await supabase
+        .from('transactions')
+        .update({ deleted_at: now })
+        .eq('id', id);
+
+      const { error: err2 } = await supabase
+        .from('transactions')
+        .update({ deleted_at: now })
+        .eq('template_id', templateId)
+        .or(`year.gt.${tx.year},and(year.eq.${tx.year},month.gte.${tx.month})`);
+
+      if (err1 || err2) {
+        console.error('Error deleting scope this_and_future:', err1 || err2);
+        return false;
+      }
+
+      await fetchTransactions();
+      return true;
+    }
+
+    if (scope === 'all') {
+      const { error } = await supabase
+        .from('transactions')
+        .update({ deleted_at: now })
+        .or(`id.eq.${templateId},template_id.eq.${templateId}`);
+
+      if (error) {
+        console.error('Error deleting all:', error);
+        return false;
+      }
+
+      await fetchTransactions();
+      return true;
+    }
+
+    return false;
+  };
+
+  const updateTransactionScope = async (id: string, scope: RecurrenceEditScope, input: Partial<TransactionInput>): Promise<boolean> => {
+    const tx = transactions.find((t) => t.id === id);
+    if (!tx) return false;
+
+    const isPartOfSeries = !!(tx.template_id || (tx.installment_total && tx.installment_total > 1));
+
+    if (!isPartOfSeries || scope === 'this') {
+      return updateTransaction(id, input);
+    }
+
+    const templateId = tx.template_id || tx.id;
+    const updateData = { ...input, updated_at: new Date().toISOString() };
+
+    if (scope === 'this_and_future') {
+      const { error: err1 } = await supabase
+        .from('transactions')
+        .update(updateData)
+        .eq('id', id);
+
+      const { error: err2 } = await supabase
+        .from('transactions')
+        .update(updateData)
+        .eq('template_id', templateId)
+        .or(`year.gt.${tx.year},and(year.eq.${tx.year},month.gte.${tx.month})`);
+
+      if (err1 || err2) {
+        console.error('Error updating scope this_and_future:', err1 || err2);
+        return false;
+      }
+
+      // If this was the template itself, update it too
+      if (tx.id === templateId) {
+        await supabase
+          .from('transactions')
+          .update(updateData)
+          .eq('id', templateId);
+      }
+
+      await fetchTransactions();
+      return true;
+    }
+
+    if (scope === 'all') {
+      const { error } = await supabase
+        .from('transactions')
+        .update(updateData)
+        .or(`id.eq.${templateId},template_id.eq.${templateId}`);
+
+      if (error) {
+        console.error('Error updating all:', error);
+        return false;
+      }
+
+      await fetchTransactions();
+      return true;
+    }
+
+    return false;
+  };
+
   // --- Derived data ---
 
   const summary: MonthlySummary = {
@@ -284,9 +396,11 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
     loading,
     createTransaction,
     updateTransaction,
+    updateTransactionScope,
     markAsPaid,
     markGroupAsPaid,
     deleteTransaction,
+    deleteTransactionScope,
     refresh: fetchTransactions,
   };
 }

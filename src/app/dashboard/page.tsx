@@ -22,8 +22,8 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Wallet, HandCoins, Plus, Filter, Eye, EyeOff } from 'lucide-react';
-import type { Transaction, TransactionInput } from '@/lib/types';
+import { Wallet, HandCoins, Plus, Eye, EyeOff } from 'lucide-react';
+import type { Transaction, TransactionInput, RecurrenceEditScope } from '@/lib/types';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -37,8 +37,10 @@ export default function DashboardPage() {
     loading: txLoading,
     createTransaction,
     updateTransaction,
+    updateTransactionScope,
     markAsPaid,
     deleteTransaction,
+    deleteTransactionScope,
     refresh,
   } = useTransactions({
     walletId: selectedWallet?.id,
@@ -47,6 +49,7 @@ export default function DashboardPage() {
   });
 
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [editingScope, setEditingScope] = useState<RecurrenceEditScope | undefined>(undefined);
   const [showPaid, setShowPaid] = useState(false);
   const [showWalletForm, setShowWalletForm] = useState(false);
 
@@ -69,15 +72,31 @@ export default function DashboardPage() {
       .reduce((acc, t) => acc + Number(t.expected_amount), 0),
   }));
 
-  const handleEdit = (tx: Transaction) => {
+  const handleEdit = (tx: Transaction, scope?: RecurrenceEditScope) => {
     setEditingTx(tx);
+    setEditingScope(scope);
   };
 
   const handleEditSubmit = async (input: TransactionInput) => {
     if (!editingTx) return false;
-    const ok = await updateTransaction(editingTx.id, input);
-    if (ok) setEditingTx(null);
+    let ok: boolean;
+    if (editingScope) {
+      ok = await updateTransactionScope(editingTx.id, editingScope, input);
+    } else {
+      ok = await updateTransaction(editingTx.id, input);
+    }
+    if (ok) {
+      setEditingTx(null);
+      setEditingScope(undefined);
+    }
     return ok;
+  };
+
+  const handleDelete = async (id: string, scope?: RecurrenceEditScope): Promise<boolean> => {
+    if (scope) {
+      return deleteTransactionScope(id, scope);
+    }
+    return deleteTransaction(id);
   };
 
   if (authLoading || walletsLoading) {
@@ -209,7 +228,7 @@ export default function DashboardPage() {
                           transaction={tx}
                           onTogglePaid={markAsPaid}
                           onEdit={handleEdit}
-                          onDelete={deleteTransaction}
+                          onDelete={handleDelete}
                         />
                       ))}
                     </div>
