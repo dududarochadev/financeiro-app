@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Financeiro Mensal",
-  description: "Seu workspace de fechamento financeiro mensal",
+  description: "Seu workspace de fechamento financeiro mensal — auto-deploy ativo 🚀",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
