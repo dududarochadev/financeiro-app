@@ -1,0 +1,22 @@
+name: Deploy para Hetzner
+
+on:
+  push:
+    branches: [master]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Executar deploy na VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 46.224.48.211
+          username: root
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /root/apps/financeiro
+            git pull origin master
+            docker compose -f docker-compose.yml build --pull
+            docker compose -f docker-compose.yml up -d --force-recreate --remove-orphans
+            docker image prune -f
