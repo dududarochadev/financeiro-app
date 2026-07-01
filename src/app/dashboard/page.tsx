@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Wallet, HandCoins, Plus, Eye, EyeOff, Table2 } from 'lucide-react';
+import { Wallet, HandCoins, Plus, Eye, EyeOff } from 'lucide-react';
 import type { Transaction, TransactionInput, RecurrenceEditScope } from '@/lib/types';
 
 export default function DashboardPage() {
@@ -39,7 +39,6 @@ export default function DashboardPage() {
     updateTransaction,
     updateTransactionScope,
     markAsPaid,
-    markAsPending,
     deleteTransaction,
     deleteTransactionScope,
     refresh,
@@ -204,14 +203,6 @@ export default function DashboardPage() {
                   </Button>
                 }
               />
-              <Button
-                className="flex-1 gap-2"
-                variant="outline"
-                onClick={() => router.push('/year-overview')}
-              >
-                <Table2 className="h-4 w-4" />
-                Visão anual
-              </Button>
             </div>
 
             <Separator />
@@ -236,7 +227,6 @@ export default function DashboardPage() {
                           key={tx.id}
                           transaction={tx}
                           onTogglePaid={markAsPaid}
-                          onMarkPending={markAsPending}
                           onEdit={handleEdit}
                           onDelete={handleDelete}
                         />
@@ -291,9 +281,8 @@ export default function DashboardPage() {
                       key={tx.id}
                       transaction={tx}
                       onTogglePaid={markAsPaid}
-                      onMarkPending={markAsPending}
                       onEdit={handleEdit}
-                      onDelete={handleDelete}
+                      onDelete={deleteTransaction}
                     />
                   ))}
                 </div>

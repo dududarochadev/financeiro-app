@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
-import { signIn } from 'next-auth/react';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { LogIn } from 'lucide-react';
@@ -10,10 +10,21 @@ import { useState } from 'react';
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
+  const supabase = createClient();
 
   async function handleGoogleLogin() {
     setLoading(true);
-    await signIn('google', { callbackUrl: '/dashboard' });
+    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${origin}/auth/callback`,
+      },
+    });
+    if (error) {
+      console.error('Login error:', error);
+      setLoading(false);
+    }
     // Redirect happens — no need to reset loading
   }
 
