@@ -145,8 +145,8 @@ export default function YearOverviewPage() {
                     const monthMap = incomeMonthMap.get(group);
                     let groupTotal = 0;
                     return (
-                      <tr key={`income-${group}`} className="bg-emerald-50/40 hover:bg-emerald-50/60">
-                        <td className="sticky left-0 bg-emerald-50/40 px-3 py-2 font-medium text-foreground text-xs truncate max-w-[140px]">
+                      <tr key={`income-${group}`} className="bg-card hover:bg-muted/20">
+                        <td className="sticky left-0 bg-card px-3 py-2 font-medium text-foreground text-xs truncate max-w-[140px]">
                           💰 {group}
                         </td>
                         {MONTHS.map((m) => {
@@ -187,8 +187,8 @@ export default function YearOverviewPage() {
 
                   {/* Income subtotal row */}
                   {incomeGroups.length > 1 && (
-                    <tr className="bg-emerald-50/40 border-b border-emerald-200">
-                      <td className="sticky left-0 bg-emerald-50/40 px-3 py-2 font-semibold text-foreground text-xs">
+                    <tr className="bg-card border-b border-border">
+                      <td className="sticky left-0 bg-card px-3 py-2 font-semibold text-foreground text-xs">
                         📊 Total Receitas
                       </td>
                       {MONTHS.map((m) => {
