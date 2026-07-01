@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/components/layout/AuthProvider';
 import type { Transaction, TransactionInput, MonthlySummary, TransactionGroup, RecurrenceEditScope } from '@/lib/types';
 
@@ -16,7 +15,6 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const { user } = useAuth();
-  const supabase = createClient();
 
   const fetchTransactions = useCallback(async () => {
     if (!user || !walletId) {
@@ -24,27 +22,24 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
       return;
     }
 
-    let query = supabase
-      .from('transactions')
-      .select('*')
-      .eq('wallet_id', walletId)
-      .eq('month', month)
-      .eq('year', year)
-      .is('deleted_at', null)
-      .order('due_date', { ascending: true, nullsFirst: false })
-      .order('created_at', { ascending: true });
+    try {
+      const params = new URLSearchParams({
+        wallet_id: walletId,
+        month: String(month),
+        year: String(year),
+      });
+      if (status) params.set('status', status);
 
-    if (status) {
-      query = query.eq('status', status);
-    }
+      const res = await fetch(`/api/transactions?${params}`);
+      if (!res.ok) throw new Error('Failed to fetch transactions');
 
-    const { data } = await query;
-
-    if (data) {
+      const data = await res.json();
       setTransactions(data as Transaction[]);
+    } catch (err) {
+      console.error('Error fetching transactions:', err);
     }
     setLoading(false);
-  }, [user, walletId, month, year, status, supabase]);
+  }, [user, walletId, month, year, status]);
 
   useEffect(() => {
     fetchTransactions();
@@ -53,168 +48,113 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
   const createTransaction = async (input: TransactionInput): Promise<boolean> => {
     if (!user) return false;
 
-    const { data, error } = await supabase
-      .from('transactions')
-      .insert({
-        wallet_id: input.wallet_id,
-        user_id: user.id,
-        type: input.type,
-        title: input.title,
-        description: input.description ?? null,
-        expected_amount: input.expected_amount,
-        paid_amount: input.paid_amount ?? null,
-        status: input.status ?? 'pending',
-        group: input.group ?? 'Outros',
-        due_date: input.due_date ?? null,
-        month: input.month,
-        year: input.year,
-        recurrence_type: input.recurrence_type ?? 'none',
-        recurrence_interval: input.recurrence_interval ?? null,
-        recurrence_end_date: input.recurrence_end_date ?? null,
-        installment_current: input.installment_current ?? null,
-        installment_total: input.installment_total ?? null,
-      })
-      .select()
-      .single();
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      });
 
-    if (error) {
-      console.error('Error creating transaction:', error);
+      if (!res.ok) {
+        console.error('Error creating transaction:', await res.text());
+        return false;
+      }
+
+      await fetchTransactions();
+      return true;
+    } catch (err) {
+      console.error('Error creating transaction:', err);
       return false;
-    }
-
-    // If it's a recurrence or installment, generate future occurrences
-    if (data && (input.recurrence_type && input.recurrence_type !== 'none' || (input.installment_total && input.installment_total > 1))) {
-      await generateFutureOccurrences(data as Transaction, input);
-    }
-
-    await fetchTransactions();
-    return true;
-  };
-
-  const generateFutureOccurrences = async (template: Transaction, input: TransactionInput) => {
-    // For installments
-    if (input.installment_total && input.installment_total > 1) {
-      const occurrences: any[] = [];
-      for (let i = 2; i <= input.installment_total; i++) {
-        let occMonth = input.month + (i - 1);
-        let occYear = input.year;
-        while (occMonth > 12) {
-          occMonth -= 12;
-          occYear++;
-        }
-
-        occurrences.push({
-          wallet_id: input.wallet_id,
-          user_id: user!.id,
-          type: input.type,
-          title: input.title,
-          expected_amount: input.expected_amount,
-          status: 'pending',
-          group: input.group ?? 'Outros',
-          month: occMonth,
-          year: occYear,
-          recurrence_type: 'none',
-          installment_current: i,
-          installment_total: input.installment_total,
-          template_id: template.id,
-        });
-      }
-
-      if (occurrences.length > 0) {
-        await supabase.from('transactions').insert(occurrences);
-      }
-    }
-
-    // For monthly recurring
-    if (input.recurrence_type === 'monthly' && !input.installment_total) {
-      const endDate = input.recurrence_end_date ? new Date(input.recurrence_end_date) : null;
-      const now = new Date();
-      const occurrences: any[] = [];
-      let occMonth = input.month + 1;
-      let occYear = input.year;
-      const maxFuture = 60; // Generate up to 60 months ahead (5 years)
-
-      for (let i = 0; i < maxFuture; i++) {
-        while (occMonth > 12) {
-          occMonth -= 12;
-          occYear++;
-        }
-
-        const occDate = new Date(occYear, occMonth - 1, 1);
-        if (endDate && occDate > endDate) break;
-
-        occurrences.push({
-          wallet_id: input.wallet_id,
-          user_id: user!.id,
-          type: input.type,
-          title: input.title,
-          expected_amount: input.expected_amount,
-          status: 'pending',
-          group: input.group ?? 'Outros',
-          month: occMonth,
-          year: occYear,
-          recurrence_type: 'monthly',
-          template_id: template.id,
-          due_date: input.due_date ? `${occYear}-${String(occMonth).padStart(2, '0')}-${String(new Date(input.due_date).getDate()).padStart(2, '0')}` : null,
-        });
-
-        occMonth++;
-      }
-
-      if (occurrences.length > 0) {
-        await supabase.from('transactions').insert(occurrences);
-      }
     }
   };
 
   const updateTransaction = async (id: string, input: Partial<TransactionInput>): Promise<boolean> => {
-    const { error } = await supabase
-      .from('transactions')
-      .update({
-        ...input,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', id);
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...input }),
+      });
 
-    if (error) {
-      console.error('Error updating transaction:', error);
+      if (!res.ok) {
+        console.error('Error updating transaction:', await res.text());
+        return false;
+      }
+
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...input } as Transaction : t))
+      );
+      return true;
+    } catch (err) {
+      console.error('Error updating transaction:', err);
       return false;
     }
-    setTransactions((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...input } : t))
-    );
-    return true;
   };
 
   const markAsPaid = async (id: string, paidAmount?: number): Promise<boolean> => {
     const now = new Date().toISOString();
-    const { error } = await supabase
-      .from('transactions')
-      .update({
-        status: 'paid',
-        paid_amount: paidAmount ?? null,
-        paid_at: now,
-        updated_at: now,
-      })
-      .eq('id', id);
 
-    if (error) {
-      console.error('Error marking as paid:', error);
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          status: 'paid',
+          paid_amount: paidAmount ?? null,
+          paid_at: now,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error('Error marking as paid:', await res.text());
+        return false;
+      }
+
+      setTransactions((prev) =>
+        prev.map((t) =>
+          t.id === id
+            ? { ...t, status: 'paid' as const, paid_amount: paidAmount ?? t.paid_amount, paid_at: now }
+            : t
+        )
+      );
+      return true;
+    } catch (err) {
+      console.error('Error marking as paid:', err);
       return false;
     }
-    setTransactions((prev) =>
-      prev.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              status: 'paid' as const,
-              paid_amount: paidAmount ?? t.paid_amount,
-              paid_at: now,
-            }
-          : t
-      )
-    );
-    return true;
+  };
+
+  const markAsPending = async (id: string): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          status: 'pending',
+          paid_amount: null,
+          paid_at: null,
+        }),
+      });
+
+      if (!res.ok) {
+        console.error('Error marking as pending:', await res.text());
+        return false;
+      }
+
+      setTransactions((prev) =>
+        prev.map((t) =>
+          t.id === id
+            ? { ...t, status: 'pending' as const, paid_amount: null, paid_at: null }
+            : t
+        )
+      );
+      return true;
+    } catch (err) {
+      console.error('Error marking as pending:', err);
+      return false;
+    }
   };
 
   const markGroupAsPaid = async (groupName: string): Promise<boolean> => {
@@ -230,144 +170,62 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
   };
 
   const deleteTransaction = async (id: string): Promise<boolean> => {
-    const { error } = await supabase
-      .from('transactions')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id);
+    try {
+      const res = await fetch(`/api/transactions?id=${id}&scope=this`, {
+        method: 'DELETE',
+      });
 
-    if (error) {
-      console.error('Error deleting transaction:', error);
+      if (!res.ok) {
+        console.error('Error deleting transaction:', await res.text());
+        return false;
+      }
+
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+      return true;
+    } catch (err) {
+      console.error('Error deleting transaction:', err);
       return false;
     }
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
-    return true;
   };
 
   const deleteTransactionScope = async (id: string, scope: RecurrenceEditScope): Promise<boolean> => {
-    const tx = transactions.find((t) => t.id === id);
-    if (!tx) return false;
+    try {
+      const res = await fetch(`/api/transactions?id=${id}&scope=${scope}`, {
+        method: 'DELETE',
+      });
 
-    const now = new Date().toISOString();
-    const isPartOfSeries = !!(tx.template_id || (tx.installment_total && tx.installment_total > 1));
-
-    if (!isPartOfSeries || scope === 'this') {
-      return deleteTransaction(id);
-    }
-
-    const templateId = tx.template_id || tx.id;
-
-    if (scope === 'this_and_future') {
-      const { error: err1 } = await supabase
-        .from('transactions')
-        .update({ deleted_at: now })
-        .eq('id', id);
-
-      const { error: err2 } = await supabase
-        .from('transactions')
-        .update({ deleted_at: now })
-        .eq('template_id', templateId)
-        .or(`year.gt.${tx.year},and(year.eq.${tx.year},month.gte.${tx.month})`);
-
-      if (err1 || err2) {
-        console.error('Error deleting scope this_and_future:', err1 || err2);
+      if (!res.ok) {
+        console.error('Error deleting scope:', await res.text());
         return false;
       }
 
       await fetchTransactions();
       return true;
+    } catch (err) {
+      console.error('Error deleting scope:', err);
+      return false;
     }
-
-    if (scope === 'all') {
-      const { error } = await supabase
-        .from('transactions')
-        .update({ deleted_at: now })
-        .or(`id.eq.${templateId},template_id.eq.${templateId}`);
-
-      if (error) {
-        console.error('Error deleting all:', error);
-        return false;
-      }
-
-      await fetchTransactions();
-      return true;
-    }
-
-    return false;
   };
 
   const updateTransactionScope = async (id: string, scope: RecurrenceEditScope, input: Partial<TransactionInput>): Promise<boolean> => {
-    const tx = transactions.find((t) => t.id === id);
-    if (!tx) return false;
+    try {
+      const res = await fetch('/api/transactions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, scope, ...input }),
+      });
 
-    const isPartOfSeries = !!(tx.template_id || (tx.installment_total && tx.installment_total > 1));
-
-    if (!isPartOfSeries || scope === 'this') {
-      return updateTransaction(id, input);
-    }
-
-    const templateId = tx.template_id || tx.id;
-
-    // Full update for the current record (includes month/year)
-    const fullUpdate = { ...input, updated_at: new Date().toISOString() };
-
-    // Stripped update for linked records — month/year/installment_current
-    // are position identifiers intrinsic to each occurrence
-    const { month: _m, year: _y, installment_current: _ic, ...scopeData } = input;
-    const scopeUpdate = { ...scopeData, updated_at: new Date().toISOString() };
-
-    if (scope === 'this_and_future') {
-      const { error: err1 } = await supabase
-        .from('transactions')
-        .update(fullUpdate)
-        .eq('id', id);
-
-      const { error: err2 } = await supabase
-        .from('transactions')
-        .update(scopeUpdate)
-        .eq('template_id', templateId)
-        .or(`year.gt.${tx.year},and(year.eq.${tx.year},month.gte.${tx.month})`);
-
-      if (err1 || err2) {
-        console.error('Error updating scope this_and_future:', err1 || err2);
-        return false;
-      }
-
-      // If this was the template itself, update it too
-      if (tx.id === templateId) {
-        await supabase
-          .from('transactions')
-          .update(scopeUpdate)
-          .eq('id', templateId);
-      }
-
-      await fetchTransactions();
-      return true;
-    }
-
-    if (scope === 'all') {
-      // Update the current record with full data
-      const { error: err1 } = await supabase
-        .from('transactions')
-        .update(fullUpdate)
-        .eq('id', id);
-
-      // Update all linked records (including past) without month/year
-      const { error: err2 } = await supabase
-        .from('transactions')
-        .update(scopeUpdate)
-        .or(`id.eq.${templateId},template_id.eq.${templateId}`)
-        .neq('id', id);
-
-      if (err1 || err2) {
-        console.error('Error updating all:', err1 || err2);
+      if (!res.ok) {
+        console.error('Error updating scope:', await res.text());
         return false;
       }
 
       await fetchTransactions();
       return true;
+    } catch (err) {
+      console.error('Error updating scope:', err);
+      return false;
     }
-
-    return false;
   };
 
   // --- Derived data ---
@@ -382,7 +240,7 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
     income_total: transactions
       .filter((t) => t.type === 'income')
       .reduce((acc, t) => acc + Number(t.paid_amount ?? t.expected_amount), 0),
-    expected_balance: 0, // computed below
+    expected_balance: 0,
   };
   summary.expected_balance = summary.income_total - summary.pending_total;
 
@@ -413,6 +271,7 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
     updateTransaction,
     updateTransactionScope,
     markAsPaid,
+    markAsPending,
     markGroupAsPaid,
     deleteTransaction,
     deleteTransactionScope,
