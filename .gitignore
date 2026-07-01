@@ -53,3 +53,6 @@ next-env.d.ts
 *.swo
 *~
 deploy/.env.production
+
+# Reasonix (AI session data)
+.reasonix/
