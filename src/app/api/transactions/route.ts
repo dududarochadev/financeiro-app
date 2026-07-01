@@ -1,6 +1,7 @@
 import { auth } from '@/lib/auth';
 import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
+import type { RecurrenceEditScope } from '@/lib/types';
 
 export async function GET(request: Request) {
   const session = await auth();
@@ -109,19 +110,49 @@ export async function PATCH(request: Request) {
     const { id, scope, ...updates } = body;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
-    const ownerCheck = await pool.query('SELECT 1 FROM public.transactions WHERE id = $1 AND user_id = $2', [id, session.user.id]);
+    // Verify ownership and get series info
+    const ownerCheck = await pool.query(
+      'SELECT template_id, month, year FROM public.transactions WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+      [id, session.user.id]
+    );
     if (ownerCheck.rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    const setClauses: string[] = [];
-    const params: any[] = [];
-    let paramIdx = 1;
-    for (const [key, value] of Object.entries(updates)) {
-      if (value !== undefined) { setClauses.push(`"${key}" = $${paramIdx}`); params.push(value); paramIdx++; }
-    }
-    setClauses.push(`updated_at = NOW()`);
-    params.push(id);
+    const tx = ownerCheck.rows[0];
+    const rootId = tx.template_id || id;
 
-    await pool.query(`UPDATE public.transactions SET ${setClauses.join(', ')} WHERE id = $${paramIdx}`, params);
+    // Build SET clauses from updates
+    const setEntries = Object.entries(updates).filter(([_, v]) => v !== undefined);
+    if (setEntries.length === 0) return NextResponse.json({ error: 'No fields to update' }, { status: 400 });
+
+    const setClauses = setEntries.map(([key], i) => `"${key}" = $${i + 1}`);
+    const setValues = setEntries.map(([_, value]) => value);
+
+    // Build WHERE clause based on scope
+    let whereClause: string;
+    let whereValues: any[];
+
+    if (!scope || scope === 'this') {
+      whereClause = `id = $${setClauses.length + 1}`;
+      whereValues = [id];
+    } else {
+      whereClause = `(id = $${setClauses.length + 1} OR template_id = $${setClauses.length + 1})`;
+      whereValues = [rootId];
+
+      if (scope === 'this_and_future') {
+        whereClause += ` AND (year > $${setClauses.length + 2} OR (year = $${setClauses.length + 2} AND month >= $${setClauses.length + 3}))`;
+        whereValues.push(tx.year, tx.month);
+      }
+    }
+
+    setClauses.push('updated_at = NOW()');
+
+    const allParams = [...setValues, ...whereValues];
+
+    await pool.query(
+      `UPDATE public.transactions SET ${setClauses.join(', ')} WHERE ${whereClause} AND deleted_at IS NULL`,
+      allParams
+    );
+
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Error updating transaction:', err);
@@ -138,12 +169,39 @@ export async function DELETE(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
+    const scope = searchParams.get('scope') as RecurrenceEditScope | null;
     if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
-    const ownerCheck = await pool.query('SELECT 1 FROM public.transactions WHERE id = $1 AND user_id = $2', [id, session.user.id]);
+    // Verify ownership and get series info
+    const ownerCheck = await pool.query(
+      'SELECT template_id, month, year FROM public.transactions WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL',
+      [id, session.user.id]
+    );
     if (ownerCheck.rows.length === 0) return NextResponse.json({ error: 'Not found' }, { status: 404 });
 
-    await pool.query('UPDATE public.transactions SET deleted_at = NOW() WHERE id = $1', [id]);
+    const tx = ownerCheck.rows[0];
+    const rootId = tx.template_id || id;
+
+    let whereClause: string;
+    const params: any[] = [];
+
+    if (!scope || scope === 'this') {
+      whereClause = 'id = $1';
+      params.push(id);
+    } else {
+      whereClause = '(id = $1 OR template_id = $1)';
+      params.push(rootId);
+
+      if (scope === 'this_and_future') {
+        whereClause += ' AND (year > $2 OR (year = $2 AND month >= $3))';
+        params.push(tx.year, tx.month);
+      }
+    }
+
+    await pool.query(
+      `UPDATE public.transactions SET deleted_at = NOW() WHERE ${whereClause} AND deleted_at IS NULL`,
+      params
+    );
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Error deleting transaction:', err);
