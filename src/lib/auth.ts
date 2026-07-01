@@ -1,7 +1,6 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
 import type { NextAuthConfig } from 'next-auth';
-import pool from '@/lib/db';
 
 export const authConfig: NextAuthConfig = {
   providers: [
@@ -12,8 +11,11 @@ export const authConfig: NextAuthConfig = {
   ],
   callbacks: {
     async signIn({ user, account }) {
+      // Auto-create/update profile on first login
       if (account?.provider === 'google' && user.id) {
         try {
+          // Dynamic import to avoid bundling pg in edge runtime
+          const pool = (await import('@/lib/db')).default;
           await pool.query(
             `INSERT INTO public.profiles (id, display_name, avatar_url)
              VALUES ($1, $2, $3)
