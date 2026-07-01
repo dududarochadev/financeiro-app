@@ -306,17 +306,24 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
     }
 
     const templateId = tx.template_id || tx.id;
-    const updateData = { ...input, updated_at: new Date().toISOString() };
+
+    // Full update for the current record (includes month/year)
+    const fullUpdate = { ...input, updated_at: new Date().toISOString() };
+
+    // Stripped update for linked records — month/year/installment_current
+    // are position identifiers intrinsic to each occurrence
+    const { month: _m, year: _y, installment_current: _ic, ...scopeData } = input;
+    const scopeUpdate = { ...scopeData, updated_at: new Date().toISOString() };
 
     if (scope === 'this_and_future') {
       const { error: err1 } = await supabase
         .from('transactions')
-        .update(updateData)
+        .update(fullUpdate)
         .eq('id', id);
 
       const { error: err2 } = await supabase
         .from('transactions')
-        .update(updateData)
+        .update(scopeUpdate)
         .eq('template_id', templateId)
         .or(`year.gt.${tx.year},and(year.eq.${tx.year},month.gte.${tx.month})`);
 
@@ -329,7 +336,7 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
       if (tx.id === templateId) {
         await supabase
           .from('transactions')
-          .update(updateData)
+          .update(scopeUpdate)
           .eq('id', templateId);
       }
 
@@ -338,13 +345,21 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
     }
 
     if (scope === 'all') {
-      const { error } = await supabase
+      // Update the current record with full data
+      const { error: err1 } = await supabase
         .from('transactions')
-        .update(updateData)
-        .or(`id.eq.${templateId},template_id.eq.${templateId}`);
+        .update(fullUpdate)
+        .eq('id', id);
 
-      if (error) {
-        console.error('Error updating all:', error);
+      // Update all linked records (including past) without month/year
+      const { error: err2 } = await supabase
+        .from('transactions')
+        .update(scopeUpdate)
+        .or(`id.eq.${templateId},template_id.eq.${templateId}`)
+        .neq('id', id);
+
+      if (err1 || err2) {
+        console.error('Error updating all:', err1 || err2);
         return false;
       }
 
