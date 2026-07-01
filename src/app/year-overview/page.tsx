@@ -23,6 +23,8 @@ export default function YearOverviewPage() {
     groups,
     monthlySummaries,
     groupMonthMap,
+    incomeGroups,
+    incomeMonthMap,
     yearTotal,
     loading: txLoading,
   } = useYearTransactions(selectedWallet?.id, year);
@@ -138,25 +140,70 @@ export default function YearOverviewPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y">
-                  {/* Income row */}
-                  <tr className="bg-emerald-50/40">
-                    <td className="sticky left-0 bg-emerald-50/40 px-3 py-2 font-medium text-emerald-700 text-xs">
-                      💰 Receitas
-                    </td>
-                    {MONTHS.map((m) => {
-                      const total = monthlySummaries[m - 1].income_total;
-                      return (
-                        <td key={m} className={`px-2 py-2 text-right tabular-nums text-xs ${
-                          total > 0 ? 'text-emerald-600 font-medium' : 'text-muted-foreground'
-                        }`}>
-                          {total > 0 ? formatCurrency(total) : '-'}
+                  {/* Income rows */}
+                  {incomeGroups.map((group) => {
+                    const monthMap = incomeMonthMap.get(group);
+                    let groupTotal = 0;
+                    return (
+                      <tr key={`income-${group}`} className="bg-emerald-50/40 hover:bg-emerald-50/60">
+                        <td className="sticky left-0 bg-emerald-50/40 px-3 py-2 font-medium text-emerald-700 text-xs truncate max-w-[140px]">
+                          💰 {group}
                         </td>
-                      );
-                    })}
-                    <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold text-emerald-700">
-                      {formatCurrency(yearTotal.income)}
-                    </td>
-                  </tr>
+                        {MONTHS.map((m) => {
+                          const entry = monthMap?.get(m);
+                          const pending = entry?.pending ?? 0;
+                          const paid = entry?.paid ?? 0;
+                          const total = pending + paid;
+                          groupTotal += total;
+
+                          if (total === 0) {
+                            return (
+                              <td key={m} className="px-2 py-2 text-right text-muted-foreground/40 text-xs">
+                                -
+                              </td>
+                            );
+                          }
+
+                          if (paid > 0 && pending === 0) {
+                            return (
+                              <td key={m} className="px-2 py-2 text-right tabular-nums text-xs text-emerald-600 line-through">
+                                {formatCurrency(total)}
+                              </td>
+                            );
+                          }
+
+                          return (
+                            <td key={m} className="px-2 py-2 text-right tabular-nums text-xs font-medium text-emerald-700">
+                              {formatCurrency(total)}
+                            </td>
+                          );
+                        })}
+                        <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold text-emerald-700">
+                          {groupTotal > 0 ? formatCurrency(groupTotal) : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+
+                  {/* Income subtotal row */}
+                  {incomeGroups.length > 1 && (
+                    <tr className="bg-emerald-50/40 border-b border-emerald-200">
+                      <td className="sticky left-0 bg-emerald-50/40 px-3 py-2 font-semibold text-emerald-800 text-xs">
+                        📊 Total Receitas
+                      </td>
+                      {MONTHS.map((m) => {
+                        const total = monthlySummaries[m - 1].income_total;
+                        return (
+                          <td key={m} className="px-2 py-2 text-right tabular-nums text-xs font-semibold text-emerald-700">
+                            {total > 0 ? formatCurrency(total) : '-'}
+                          </td>
+                        );
+                      })}
+                      <td className="px-3 py-2 text-right tabular-nums text-xs font-bold text-emerald-700">
+                        {formatCurrency(yearTotal.income)}
+                      </td>
+                    </tr>
+                  )}
 
                   {/* Group rows */}
                   {groups.map((group) => {
@@ -184,7 +231,7 @@ export default function YearOverviewPage() {
 
                           if (paid > 0 && pending === 0) {
                             return (
-                              <td key={m} className="px-2 py-2 text-right tabular-nums text-xs text-emerald-600 line-through">
+                              <td key={m} className="px-2 py-2 text-right tabular-nums text-xs text-red-500 line-through">
                                 {formatCurrency(total)}
                               </td>
                             );
@@ -250,7 +297,8 @@ export default function YearOverviewPage() {
             </div>
 
             <p className="text-center text-xs text-muted-foreground">
-              Valores riscados em verde = totalmente pago no mês
+              Valores riscados em <span className="text-red-500">vermelho</span> = despesa paga |{' '}
+              Valores riscados em <span className="text-emerald-600">verde</span> = receita recebida
             </p>
           </>
         )}
