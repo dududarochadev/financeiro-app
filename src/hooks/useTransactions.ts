@@ -34,7 +34,13 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
       if (!res.ok) throw new Error('Failed to fetch transactions');
 
       const data = await res.json();
-      setTransactions(data as Transaction[]);
+      const sorted = (data as Transaction[]).sort((a, b) => {
+        // Income first, then expenses
+        if (a.type !== b.type) return a.type === 'income' ? -1 : 1;
+        // Then alphabetically by title
+        return a.title.localeCompare(b.title, 'pt-BR');
+      });
+      setTransactions(sorted);
     } catch (err) {
       console.error('Error fetching transactions:', err);
     }
