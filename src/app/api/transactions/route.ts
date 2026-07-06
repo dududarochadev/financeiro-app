@@ -122,8 +122,9 @@ export async function PATCH(request: Request) {
 
     // When scope != 'this', exclude per-occurrence structural fields
     // so month/year aren't overwritten on all occurrences in the series
+    // installment_total is excluded here so it CAN be changed with scope=all
     const structuralFields = new Set([
-      'month', 'year', 'installment_current', 'installment_total',
+      'month', 'year', 'installment_current',
       'template_id', 'wallet_id', 'user_id', 'paid_amount', 'paid_at',
     ]);
 
@@ -159,6 +160,95 @@ export async function PATCH(request: Request) {
       `UPDATE public.transactions SET ${setClauses.join(', ')} WHERE ${whereClause} AND deleted_at IS NULL`,
       allParams
     );
+
+    // Handle installment_total changes — create or delete rows as needed
+    if (scope && scope !== 'this' && updates.installment_total !== undefined) {
+      const newTotal = updates.installment_total;
+
+      // Find current max installment in the series
+      const seriesQuery = await pool.query(
+        `SELECT MAX(installment_current) as max_current
+         FROM public.transactions
+         WHERE (id = $1 OR template_id = $1) AND deleted_at IS NULL`,
+        [rootId]
+      );
+      const oldMaxCurrent = seriesQuery.rows[0]?.max_current || 0;
+
+      if (newTotal > oldMaxCurrent) {
+        // Create new installment rows
+        // Get reference data from the first installment
+        const refQuery = await pool.query(
+          `SELECT * FROM public.transactions WHERE id = $1 AND deleted_at IS NULL`,
+          [rootId]
+        );
+        if (refQuery.rows.length === 0) {
+          return NextResponse.json({ error: 'Reference row not found' }, { status: 500 });
+        }
+        const ref = refQuery.rows[0];
+
+        // Find the last active installment to determine starting month/year
+        const lastQuery = await pool.query(
+          `SELECT * FROM public.transactions
+           WHERE (id = $1 OR template_id = $1) AND deleted_at IS NULL
+           ORDER BY year DESC, month DESC LIMIT 1`,
+          [rootId]
+        );
+        const last = lastQuery.rows[0];
+
+        // Build base data, merging any PATCH updates
+        const baseData: Record<string, any> = {
+          wallet_id: ref.wallet_id,
+          user_id: ref.user_id,
+          type: ref.type,
+          title: updates.title ?? ref.title,
+          description: updates.description ?? ref.description,
+          expected_amount: updates.expected_amount ?? ref.expected_amount,
+          paid_amount: null,
+          status: 'pending',
+          group: updates.group ?? ref.group,
+          recurrence_type: 'none',
+          template_id: rootId,
+        };
+
+        const newRows: Record<string, any>[] = [];
+        let occMonth = last.month + 1;
+        let occYear = last.year;
+        if (occMonth > 12) { occMonth = 1; occYear++; }
+
+        for (let i = oldMaxCurrent + 1; i <= newTotal; i++) {
+          newRows.push({
+            ...baseData,
+            month: occMonth,
+            year: occYear,
+            installment_current: i,
+            installment_total: newTotal,
+          });
+          occMonth++;
+          if (occMonth > 12) { occMonth = 1; occYear++; }
+        }
+
+        if (newRows.length > 0) {
+          const cols = Object.keys(newRows[0]).join(', ');
+          const valPlaceholders = newRows.map((_, i) => {
+            const row = newRows[i];
+            return '(' + Object.keys(row).map((_, j) => `$${i * Object.keys(row).length + j + 1}`).join(', ') + ')';
+          }).join(', ');
+          const flatValues = newRows.flatMap(Object.values);
+          await pool.query(`INSERT INTO public.transactions (${cols}) VALUES ${valPlaceholders}`, flatValues);
+        }
+      }
+
+      if (newTotal < oldMaxCurrent) {
+        // Soft-delete rows beyond the new total
+        await pool.query(
+          `UPDATE public.transactions SET deleted_at = NOW()
+           WHERE (id = $1 OR template_id = $1)
+           AND installment_current > $2
+           AND deleted_at IS NULL`,
+          [rootId, newTotal]
+        );
+      }
+    }
 
     return NextResponse.json({ success: true });
   } catch (err) {

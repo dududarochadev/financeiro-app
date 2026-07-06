@@ -62,6 +62,7 @@ export default function DashboardPage() {
   const [editingScope, setEditingScope] = useState<RecurrenceEditScope | undefined>(undefined);
   const [editGroup, setEditGroup] = useState('');
   const [editCustomGroup, setEditCustomGroup] = useState('');
+  const [editInstallmentTotal, setEditInstallmentTotal] = useState('');
   const [showPaid, setShowPaid] = useState(false);
   const [payingGroup, setPayingGroup] = useState<string | null>(null);
   const [showWalletForm, setShowWalletForm] = useState(false);
@@ -90,16 +91,25 @@ export default function DashboardPage() {
     setEditingScope(scope);
     setEditGroup(tx.group);
     setEditCustomGroup('');
+    setEditInstallmentTotal(tx.installment_total ? String(tx.installment_total) : '');
   };
 
   const handleEditSubmit = async (input: TransactionInput) => {
     if (!editingTx) return false;
     const finalGroup = editGroup === '__custom__' ? editCustomGroup.trim() : editGroup;
+
+    // Include installment_total when editing a series with scope
+    const extras: Record<string, any> = {};
+    const isSeriesWithScope = editingTx.installment_total && editingTx.installment_total > 1 && editingScope;
+    if (isSeriesWithScope && editInstallmentTotal) {
+      extras.installment_total = parseInt(editInstallmentTotal);
+    }
+
     let ok: boolean;
     if (editingScope) {
-      ok = await updateTransactionScope(editingTx.id, editingScope, { ...input, group: finalGroup || editingTx.group });
+      ok = await updateTransactionScope(editingTx.id, editingScope, { ...input, group: finalGroup || editingTx.group, ...extras });
     } else {
-      ok = await updateTransaction(editingTx.id, { ...input, group: finalGroup || editingTx.group });
+      ok = await updateTransaction(editingTx.id, { ...input, group: finalGroup || editingTx.group, ...extras });
     }
     if (ok) {
       setEditingTx(null);
@@ -407,6 +417,23 @@ export default function DashboardPage() {
                   required
                 />
               </div>
+              {editingTx.installment_total && editingTx.installment_total > 1 && editingScope && editingScope !== 'this' && (
+                <div className="space-y-2">
+                  <Label htmlFor="edit-installments">Total de parcelas</Label>
+                  <Input
+                    id="edit-installments"
+                    type="number"
+                    min="1"
+                    max="999"
+                    value={editInstallmentTotal}
+                    onChange={(e) => setEditInstallmentTotal(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Se aumentar, novas parcelas serão criadas nos meses seguintes.
+                    Se diminuir, parcelas excedentes serão removidas.
+                  </p>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="edit-group">Grupo</Label>
                 <Select
