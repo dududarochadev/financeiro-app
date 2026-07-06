@@ -1,16 +1,16 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/layout/AuthProvider';
 import { Header } from '@/components/layout/Header';
 import { useMonth } from '@/hooks/useMonth';
 import { useWallets } from '@/hooks/useWallets';
-import { useYearTransactions } from '@/hooks/useYearTransactions';
+import { useYearTransactions, YearTransaction } from '@/hooks/useYearTransactions';
 import { formatCurrency, getMonthNameShort } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, ChevronLeft, ChevronRight, TableIcon } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 
@@ -20,6 +20,7 @@ export default function YearOverviewPage() {
   const { year, goToPreviousYear, goToNextYear } = useMonth();
   const { wallets, selectedWallet, loading: walletsLoading, createWallet, switchWallet } = useWallets();
   const {
+    transactions,
     groups,
     monthlySummaries,
     groupMonthMap,
@@ -28,6 +29,18 @@ export default function YearOverviewPage() {
     yearTotal,
     loading: txLoading,
   } = useYearTransactions(selectedWallet?.id, year);
+
+  const [expandAll, setExpandAll] = useState(false);
+
+  // Map group -> individual transactions for expanded view
+  const txnsByGroup = useMemo(() => {
+    const map = new Map<string, YearTransaction[]>();
+    for (const tx of transactions) {
+      if (!map.has(tx.group)) map.set(tx.group, []);
+      map.get(tx.group)!.push(tx);
+    }
+    return map;
+  }, [transactions]);
 
   if (authLoading || walletsLoading) {
     return (
@@ -121,6 +134,20 @@ export default function YearOverviewPage() {
               </Card>
             </div>
 
+            {/* Expand toggle */}
+            <div className="flex items-center justify-end">
+              <button
+                onClick={() => setExpandAll(!expandAll)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/30 hover:text-foreground transition-colors"
+              >
+                {expandAll ? (
+                  <>▲ Recolher detalhes</>
+                ) : (
+                  <>▼ Expandir tudo</>
+                )}
+              </button>
+            </div>
+
             {/* Monthly summaries row */}
             <div className="overflow-x-auto rounded-lg border">
               <table className="w-full text-left text-sm">
@@ -145,43 +172,70 @@ export default function YearOverviewPage() {
                     const monthMap = incomeMonthMap.get(group);
                     let groupTotal = 0;
                     return (
-                      <tr key={`income-${group}`} className="bg-card hover:bg-muted/20">
-                        <td className="sticky left-0 bg-card px-3 py-2 font-medium text-foreground text-xs truncate max-w-[140px]">
-                          💰 {group}
-                        </td>
-                        {MONTHS.map((m) => {
-                          const entry = monthMap?.get(m);
-                          const pending = entry?.pending ?? 0;
-                          const paid = entry?.paid ?? 0;
-                          const total = pending + paid;
-                          groupTotal += total;
+                      <Fragment key={`income-${group}`}>
+                        <tr className="bg-card hover:bg-muted/20">
+                          <td className="sticky left-0 bg-card px-3 py-2 font-medium text-foreground text-xs truncate max-w-[140px]">
+                            💰 {group}
+                          </td>
+                          {MONTHS.map((m) => {
+                            const entry = monthMap?.get(m);
+                            const pending = entry?.pending ?? 0;
+                            const paid = entry?.paid ?? 0;
+                            const total = pending + paid;
+                            groupTotal += total;
 
-                          if (total === 0) {
-                            return (
-                              <td key={m} className="px-2 py-2 text-right text-muted-foreground/40 text-xs">
-                                -
-                              </td>
-                            );
-                          }
+                            if (total === 0) {
+                              return (
+                                <td key={m} className="px-2 py-2 text-right text-muted-foreground/40 text-xs">
+                                  -
+                                </td>
+                              );
+                            }
 
-                          if (paid > 0 && pending === 0) {
+                            if (paid > 0 && pending === 0) {
+                              return (
+                                <td key={m} className="px-2 py-2 text-right tabular-nums text-xs text-emerald-600 line-through">
+                                  {formatCurrency(total)}
+                                </td>
+                              );
+                            }
+
                             return (
-                              <td key={m} className="px-2 py-2 text-right tabular-nums text-xs text-emerald-600 line-through">
+                              <td key={m} className="px-2 py-2 text-right tabular-nums text-xs font-medium text-foreground">
                                 {formatCurrency(total)}
                               </td>
                             );
-                          }
-
+                          })}
+                          <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold text-foreground">
+                            {groupTotal > 0 ? formatCurrency(groupTotal) : '-'}
+                          </td>
+                        </tr>
+                        {/* Sub-rows: individual income transactions */}
+                        {expandAll && txnsByGroup.get(group)?.map((tx) => {
+                          const isPaid = tx.status === 'paid';
+                          const amount = isPaid ? (tx.paid_amount ?? tx.expected_amount) : tx.expected_amount;
                           return (
-                            <td key={m} className="px-2 py-2 text-right tabular-nums text-xs font-medium text-foreground">
-                              {formatCurrency(total)}
-                            </td>
+                            <tr key={tx.id} className="bg-emerald-50/20">
+                              <td className="sticky left-0 bg-emerald-50/20 px-3 py-1 pl-8 text-xs text-muted-foreground/70 truncate max-w-[140px]">
+                                └─ {tx.title}
+                              </td>
+                              {MONTHS.map((m) => {
+                                if (m !== tx.month) {
+                                  return <td key={m} className="px-2 py-1 text-right text-xs text-muted-foreground/20">-</td>;
+                                }
+                                return (
+                                  <td key={m} className={`px-2 py-1 text-right tabular-nums text-xs ${isPaid ? 'text-emerald-600 line-through' : 'text-foreground/70'}`}>
+                                    {formatCurrency(amount)}
+                                  </td>
+                                );
+                              })}
+                              <td className="px-3 py-1 text-right tabular-nums text-xs text-muted-foreground/70">
+                                {formatCurrency(amount)}
+                              </td>
+                            </tr>
                           );
                         })}
-                        <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold text-foreground">
-                          {groupTotal > 0 ? formatCurrency(groupTotal) : '-'}
-                        </td>
-                      </tr>
+                      </Fragment>
                     );
                   })}
 
@@ -210,43 +264,70 @@ export default function YearOverviewPage() {
                     const monthMap = groupMonthMap.get(group);
                     let groupTotal = 0;
                     return (
-                      <tr key={group} className="bg-card hover:bg-muted/20">
-                        <td className="sticky left-0 bg-card px-3 py-2 font-medium text-xs truncate max-w-[140px]">
-                          {group}
-                        </td>
-                        {MONTHS.map((m) => {
-                          const entry = monthMap?.get(m);
-                          const pending = entry?.pending ?? 0;
-                          const paid = entry?.paid ?? 0;
-                          const total = pending + paid;
-                          groupTotal += total;
+                      <Fragment key={group}>
+                        <tr className="bg-card hover:bg-muted/20">
+                          <td className="sticky left-0 bg-card px-3 py-2 font-medium text-xs truncate max-w-[140px]">
+                            {group}
+                          </td>
+                          {MONTHS.map((m) => {
+                            const entry = monthMap?.get(m);
+                            const pending = entry?.pending ?? 0;
+                            const paid = entry?.paid ?? 0;
+                            const total = pending + paid;
+                            groupTotal += total;
 
-                          if (total === 0) {
-                            return (
-                              <td key={m} className="px-2 py-2 text-right text-muted-foreground/40 text-xs">
-                                -
-                              </td>
-                            );
-                          }
+                            if (total === 0) {
+                              return (
+                                <td key={m} className="px-2 py-2 text-right text-muted-foreground/40 text-xs">
+                                  -
+                                </td>
+                              );
+                            }
 
-                          if (paid > 0 && pending === 0) {
+                            if (paid > 0 && pending === 0) {
+                              return (
+                                <td key={m} className="px-2 py-2 text-right tabular-nums text-xs text-red-500 line-through">
+                                  {formatCurrency(total)}
+                                </td>
+                              );
+                            }
+
                             return (
-                              <td key={m} className="px-2 py-2 text-right tabular-nums text-xs text-red-500 line-through">
+                              <td key={m} className="px-2 py-2 text-right tabular-nums text-xs font-medium">
                                 {formatCurrency(total)}
                               </td>
                             );
-                          }
-
+                          })}
+                          <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold">
+                            {groupTotal > 0 ? formatCurrency(groupTotal) : '-'}
+                          </td>
+                        </tr>
+                        {/* Sub-rows: individual expense transactions */}
+                        {expandAll && txnsByGroup.get(group)?.map((tx) => {
+                          const isPaid = tx.status === 'paid';
+                          const amount = isPaid ? (tx.paid_amount ?? tx.expected_amount) : tx.expected_amount;
                           return (
-                            <td key={m} className="px-2 py-2 text-right tabular-nums text-xs font-medium">
-                              {formatCurrency(total)}
-                            </td>
+                            <tr key={tx.id} className="bg-card/40">
+                              <td className="sticky left-0 bg-card/40 px-3 py-1 pl-8 text-xs text-muted-foreground/70 truncate max-w-[140px]">
+                                └─ {tx.title}
+                              </td>
+                              {MONTHS.map((m) => {
+                                if (m !== tx.month) {
+                                  return <td key={m} className="px-2 py-1 text-right text-xs text-muted-foreground/20">-</td>;
+                                }
+                                return (
+                                  <td key={m} className={`px-2 py-1 text-right tabular-nums text-xs ${isPaid ? 'text-red-500 line-through' : 'text-foreground/70'}`}>
+                                    {formatCurrency(amount)}
+                                  </td>
+                                );
+                              })}
+                              <td className="px-3 py-1 text-right tabular-nums text-xs text-muted-foreground/70">
+                                {formatCurrency(amount)}
+                              </td>
+                            </tr>
                           );
                         })}
-                        <td className="px-3 py-2 text-right tabular-nums text-xs font-semibold">
-                          {groupTotal > 0 ? formatCurrency(groupTotal) : '-'}
-                        </td>
-                      </tr>
+                      </Fragment>
                     );
                   })}
 

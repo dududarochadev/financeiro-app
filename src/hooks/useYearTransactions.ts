@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/layout/AuthProvider';
 
-interface YearTransaction {
+export interface YearTransaction {
   id: string;
   title: string;
   type: 'expense' | 'income';
