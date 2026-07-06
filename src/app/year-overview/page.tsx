@@ -38,17 +38,22 @@ export default function YearOverviewPage() {
   }
 
   // Aggregate transactions by title within each group for expanded view
-  const titleAggsByGroup = useMemo(() => {
-    const map = new Map<string, Map<string, Map<number, TitleMonthAgg>>>();
+  // Split by type so income sub-rows only show income transactions, and vice versa
+  const { incomeTitleAggsByGroup, expenseTitleAggsByGroup } = useMemo(() => {
+    const incomeMap = new Map<string, Map<string, Map<number, TitleMonthAgg>>>();
+    const expenseMap = new Map<string, Map<string, Map<number, TitleMonthAgg>>>();
+
     for (const tx of transactions) {
       const amount = tx.status === 'paid'
         ? Number(tx.paid_amount ?? tx.expected_amount)
         : Number(tx.expected_amount);
 
-      let titleMap = map.get(tx.group);
+      const targetMap = tx.type === 'income' ? incomeMap : expenseMap;
+
+      let titleMap = targetMap.get(tx.group);
       if (!titleMap) {
         titleMap = new Map();
-        map.set(tx.group, titleMap);
+        targetMap.set(tx.group, titleMap);
       }
 
       let monthMap = titleMap.get(tx.title);
@@ -66,7 +71,8 @@ export default function YearOverviewPage() {
       agg.total += amount;
       if (tx.status !== 'paid') agg.allPaid = false;
     }
-    return map;
+
+    return { incomeTitleAggsByGroup: incomeMap, expenseTitleAggsByGroup: expenseMap };
   }, [transactions]);
 
   if (authLoading || walletsLoading) {
@@ -238,7 +244,7 @@ export default function YearOverviewPage() {
                           </td>
                         </tr>
                         {/* Sub-rows: income aggregated by title */}
-                        {expandAll && titleAggsByGroup.get(group) && [...titleAggsByGroup.get(group)!.entries()].map(([title, monthMap]) => {
+                        {expandAll && incomeTitleAggsByGroup.get(group) && [...incomeTitleAggsByGroup.get(group)!.entries()].map(([title, monthMap]) => {
                           let titleTotal = 0;
                           return (
                             <tr key={title} className="bg-emerald-50/20">
@@ -329,7 +335,7 @@ export default function YearOverviewPage() {
                           </td>
                         </tr>
                         {/* Sub-rows: expenses aggregated by title */}
-                        {expandAll && titleAggsByGroup.get(group) && [...titleAggsByGroup.get(group)!.entries()].map(([title, monthMap]) => {
+                        {expandAll && expenseTitleAggsByGroup.get(group) && [...expenseTitleAggsByGroup.get(group)!.entries()].map(([title, monthMap]) => {
                           let titleTotal = 0;
                           return (
                             <tr key={title} className="bg-card/40">
