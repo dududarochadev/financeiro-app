@@ -110,14 +110,6 @@ export interface TransactionInput {
   tag_ids?: string[];
 }
 
-// --- Grouped Transactions (for Pay Bills) ---
-
-export interface TransactionGroup {
-  name: string;
-  transactions: Transaction[];
-  total: number;
-}
-
 // --- Monthly Summary ---
 
 export interface MonthlySummary {

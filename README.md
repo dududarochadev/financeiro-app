@@ -1,6 +1,6 @@
 # Financeiro Mensal
 
-Seu workspace de fechamento financeiro mensal. Controle de receitas, despesas, carteiras e contas a pagar.
+Seu workspace de fechamento financeiro mensal. Controle de receitas, despesas, carteiras.
 
 ## Stack
 
@@ -33,7 +33,6 @@ src/
 │   │   └── tags/                 # CRUD tags
 │   ├── login/                    # Página de login
 │   ├── dashboard/               # Dashboard principal
-│   ├── pay-bills/               # Pagar contas
 │   └── transactions/            # Nova transação
 ├── components/
 │   ├── layout/                  # AuthProvider, Header

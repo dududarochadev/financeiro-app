@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/components/layout/AuthProvider';
 import { Header } from '@/components/layout/Header';
@@ -29,7 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Wallet, HandCoins, Plus, Eye, EyeOff, Table2 } from 'lucide-react';
+import { Wallet, Plus, Eye, EyeOff, Table2, CheckCircle, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
 import type { Transaction, TransactionInput, RecurrenceEditScope } from '@/lib/types';
 
 export default function DashboardPage() {
@@ -47,6 +48,7 @@ export default function DashboardPage() {
     updateTransactionScope,
     markAsPaid,
     markAsPending,
+    markGroupAsPaid,
     deleteTransaction,
     deleteTransactionScope,
     refresh,
@@ -61,6 +63,7 @@ export default function DashboardPage() {
   const [editGroup, setEditGroup] = useState('');
   const [editCustomGroup, setEditCustomGroup] = useState('');
   const [showPaid, setShowPaid] = useState(false);
+  const [payingGroup, setPayingGroup] = useState<string | null>(null);
   const [showWalletForm, setShowWalletForm] = useState(false);
 
   // Collect unique groups (sorted alphabetically for consistent ordering)
@@ -121,8 +124,6 @@ export default function DashboardPage() {
   }
 
   if (!user) return null;
-
-  const allExpenses = [...pendingTransactions, ...(showPaid ? paidTransactions : [])];
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -195,14 +196,6 @@ export default function DashboardPage() {
 
             {/* Quick Actions */}
             <div className="flex gap-2">
-              <Button
-                className="flex-1 gap-2"
-                variant="default"
-                onClick={() => router.push('/pay-bills')}
-              >
-                <HandCoins className="h-4 w-4" />
-                Pagar contas
-              </Button>
               <TransactionForm
                 walletId={selectedWallet.id}
                 month={month}
@@ -237,7 +230,31 @@ export default function DashboardPage() {
                 {pendingGroups.map((group) => (
                   <div key={group.name} className="space-y-1">
                     <div className="flex items-center justify-between px-1">
-                      <span className="text-sm font-medium">{group.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium">{group.name}</span>
+                        <button
+                          onClick={async () => {
+                            setPayingGroup(group.name);
+                            const ok = await markGroupAsPaid(group.name);
+                            setPayingGroup(null);
+                            if (ok) {
+                              toast.success(`Grupo "${group.name}" pago!`);
+                              await refresh();
+                            } else {
+                              toast.error('Erro ao pagar grupo');
+                            }
+                          }}
+                          disabled={payingGroup === group.name}
+                          className="inline-flex items-center justify-center rounded-full p-0.5 text-emerald-500 transition-colors hover:text-emerald-400 disabled:opacity-50"
+                          title="Pagar grupo"
+                        >
+                          {payingGroup === group.name ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle className="h-4 w-4" />
+                          )}
+                        </button>
+                      </div>
                       <span className="text-sm font-semibold tabular-nums text-red-500">
                         {formatCurrency(group.total)}
                       </span>

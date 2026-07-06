@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/components/layout/AuthProvider';
-import type { Transaction, TransactionInput, MonthlySummary, TransactionGroup, RecurrenceEditScope } from '@/lib/types';
+import type { Transaction, TransactionInput, MonthlySummary, RecurrenceEditScope } from '@/lib/types';
 
 interface UseTransactionsOptions {
   walletId?: string;
@@ -253,24 +253,10 @@ export function useTransactions({ walletId, month, year, status }: UseTransactio
   const pendingTransactions = transactions.filter((t) => t.status === 'pending');
   const paidTransactions = transactions.filter((t) => t.status === 'paid');
 
-  const groupedTransactions: TransactionGroup[] = [
-    ...new Set(transactions.map((t) => t.group)),
-  ].sort((a, b) => a.localeCompare(b, 'pt-BR')).map((groupName) => {
-    const groupTransactions = transactions.filter((t) => t.group === groupName);
-    return {
-      name: groupName,
-      transactions: groupTransactions,
-      total: groupTransactions
-        .filter((t) => t.status === 'pending' && t.type === 'expense')
-        .reduce((acc, t) => acc + Number(t.expected_amount), 0),
-    };
-  });
-
   return {
     transactions,
     pendingTransactions,
     paidTransactions,
-    groupedTransactions,
     summary,
     loading,
     createTransaction,

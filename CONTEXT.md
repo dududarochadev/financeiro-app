@@ -31,7 +31,6 @@ src/
 │   │   └── wallets/route.ts               # CRUD carteiras
 │   ├── dashboard/page.tsx                 # Dashboard mensal principal
 │   ├── login/page.tsx                     # Login Google OAuth
-│   ├── pay-bills/page.tsx                 # Pagar contas em lote
 │   ├── transactions/new/page.tsx          # Nova transação standalone
 │   ├── year-overview/page.tsx             # Visão anual (planilha)
 │   ├── globals.css                        # Tema Tailwind v4 + dark mode
@@ -72,11 +71,10 @@ src/
 | `/` | `app/page.tsx` | Redirect: logado → `/dashboard`, anônimo → `/login` |
 | `/login` | `app/login/page.tsx` | Botão "Entrar com Google" |
 | `/dashboard` | `app/dashboard/page.tsx` | Dashboard mensal: cards de resumo, lista de grupos, toggle pago/pendente, edição inline |
-| `/pay-bills` | `app/pay-bills/page.tsx` | Modo "Pagar contas": pagar grupo ou individual, barra de progresso |
 | `/transactions/new` | `app/transactions/new/page.tsx` | Página avulsa para criar transação (redireciona ao salvar) |
 | `/year-overview` | `app/year-overview/page.tsx` | Planilha anual: matriz grupo×mês com receitas e saldo |
 
-Middleware (`src/middleware.ts`) protege `/dashboard`, `/pay-bills`, `/transactions` — redireciona não-autenticados para `/login`.
+Middleware (`src/middleware.ts`) protege `/dashboard`, `/transactions` — redireciona não-autenticados para `/login`.
 
 ---
 
@@ -135,7 +133,7 @@ Todas exigem auth — sem sessão → `401`.
 - **Import**: `@/hooks/useMonth`
 
 ### `useTransactions({ walletId, month, year, status? })`
-- **Retorna**: `{ transactions, pendingTransactions, paidTransactions, groupedTransactions, summary, loading, createTransaction, updateTransaction, updateTransactionScope, markAsPaid, markAsPending, markGroupAsPaid, deleteTransaction, deleteTransactionScope, refresh }`
+- **Retorna**: `{ transactions, pendingTransactions, paidTransactions, summary, loading, createTransaction, updateTransaction, updateTransactionScope, markAsPaid, markAsPending, markGroupAsPaid, deleteTransaction, deleteTransactionScope, refresh }`
 - **API calls**: GET/POST/PATCH/DELETE `/api/transactions`
 - **Dependências**: `[user, walletId, month, year, status]`
 
@@ -157,7 +155,7 @@ Todas exigem auth — sem sessão → `401`.
 |---|---|---|
 | `auth.ts` | `authConfig`, `handlers`, `auth`, `signIn`, `signOut` | NextAuth v5 com Google OAuth. `signIn` faz upsert em `public.profiles` |
 | `db.ts` | `pool` (default + named) | Pool PostgreSQL singleton (`DATABASE_URL`, max 10, idle 30s) |
-| `types.ts` | `Transaction`, `Wallet`, `Tag`, `TransactionInput`, `MonthlySummary`, `TransactionGroup`, `RecurrenceEditScope`, ... | Todos os tipos do projeto |
+| `types.ts` | `Transaction`, `Wallet`, `Tag`, `TransactionInput`, `MonthlySummary`, `RecurrenceEditScope`, ... | Todos os tipos do projeto |
 | `utils.ts` | `cn`, `formatCurrency`, `getMonthName`, `getMonthNameShort`, `getCurrentMonthYear`, `getPreviousMonth`, `getNextMonth`, `getPreviousYear`, `getNextYear`, `formatDate`, `formatInstallment` | Utilitários |
 
 ---
