@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/select';
 import { Wallet, Plus, Eye, EyeOff, Table2, CheckCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { Transaction, TransactionInput, RecurrenceEditScope } from '@/lib/types';
+import type { Transaction, TransactionInput, TransactionType, RecurrenceEditScope } from '@/lib/types';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -63,6 +63,7 @@ export default function DashboardPage() {
   const [editGroup, setEditGroup] = useState('');
   const [editCustomGroup, setEditCustomGroup] = useState('');
   const [editInstallmentTotal, setEditInstallmentTotal] = useState('');
+  const [editType, setEditType] = useState<TransactionType>('expense');
   const [showPaid, setShowPaid] = useState(false);
   const [payingGroup, setPayingGroup] = useState<string | null>(null);
   const [showWalletForm, setShowWalletForm] = useState(false);
@@ -92,6 +93,7 @@ export default function DashboardPage() {
     setEditGroup(tx.group);
     setEditCustomGroup('');
     setEditInstallmentTotal(tx.installment_total ? String(tx.installment_total) : '');
+    setEditType(tx.type);
   };
 
   const handleEditSubmit = async (input: TransactionInput) => {
@@ -388,7 +390,7 @@ export default function DashboardPage() {
                 const formData = new FormData(form);
                 await handleEditSubmit({
                   wallet_id: editingTx.wallet_id,
-                  type: editingTx.type,
+                  type: editType,
                   title: formData.get('title') as string,
                   expected_amount: parseFloat((formData.get('amount') as string).replace(',', '.')),
                   month: editingTx.month,
@@ -397,6 +399,26 @@ export default function DashboardPage() {
               }}
               className="space-y-4"
             >
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={editType === 'expense' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setEditType('expense')}
+                >
+                  Despesa
+                </Button>
+                <Button
+                  type="button"
+                  variant={editType === 'income' ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setEditType('income')}
+                >
+                  Receita
+                </Button>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-title">Título</Label>
                 <Input

@@ -196,6 +196,8 @@ export async function PATCH(request: Request) {
         const last = lastQuery.rows[0];
 
         // Build base data, merging any PATCH updates
+        // Note: paid_amount is intentionally omitted so the DB default (0) is used,
+        // matching how POST creates installment rows
         const baseData: Record<string, any> = {
           wallet_id: ref.wallet_id,
           user_id: ref.user_id,
@@ -203,7 +205,6 @@ export async function PATCH(request: Request) {
           title: updates.title ?? ref.title,
           description: updates.description ?? ref.description,
           expected_amount: updates.expected_amount ?? ref.expected_amount,
-          paid_amount: null,
           status: 'pending',
           group: updates.group ?? ref.group,
           recurrence_type: 'none',
