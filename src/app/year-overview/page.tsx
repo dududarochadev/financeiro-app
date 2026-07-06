@@ -244,7 +244,17 @@ export default function YearOverviewPage() {
                           </td>
                         </tr>
                         {/* Sub-rows: income aggregated by title */}
-                        {expandAll && incomeTitleAggsByGroup.get(group) && [...incomeTitleAggsByGroup.get(group)!.entries()].map(([title, monthMap]) => {
+                        {expandAll && incomeTitleAggsByGroup.get(group) && [...incomeTitleAggsByGroup.get(group)!.entries()]
+                          .sort(([titleA, mapA], [titleB, mapB]) => {
+                            const firstA = Math.min(...mapA.keys());
+                            const firstB = Math.min(...mapB.keys());
+                            if (firstA !== firstB) return firstA - firstB;
+                            const lastA = Math.max(...mapA.keys());
+                            const lastB = Math.max(...mapB.keys());
+                            if (lastA !== lastB) return lastA - lastB;
+                            return titleA.localeCompare(titleB);
+                          })
+                          .map(([title, monthMap]) => {
                           let titleTotal = 0;
                           return (
                             <tr key={title} className="bg-emerald-50/20">
@@ -335,7 +345,17 @@ export default function YearOverviewPage() {
                           </td>
                         </tr>
                         {/* Sub-rows: expenses aggregated by title */}
-                        {expandAll && expenseTitleAggsByGroup.get(group) && [...expenseTitleAggsByGroup.get(group)!.entries()].map(([title, monthMap]) => {
+                        {expandAll && expenseTitleAggsByGroup.get(group) && [...expenseTitleAggsByGroup.get(group)!.entries()]
+                          .sort(([titleA, mapA], [titleB, mapB]) => {
+                            const firstA = Math.min(...mapA.keys());
+                            const firstB = Math.min(...mapB.keys());
+                            if (firstA !== firstB) return firstA - firstB;
+                            const lastA = Math.max(...mapA.keys());
+                            const lastB = Math.max(...mapB.keys());
+                            if (lastA !== lastB) return lastA - lastB;
+                            return titleA.localeCompare(titleB);
+                          })
+                          .map(([title, monthMap]) => {
                           let titleTotal = 0;
                           return (
                             <tr key={title} className="bg-card/40">
