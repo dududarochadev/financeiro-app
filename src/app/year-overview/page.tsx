@@ -6,7 +6,7 @@ import { useAuth } from '@/components/layout/AuthProvider';
 import { Header } from '@/components/layout/Header';
 import { useMonth } from '@/hooks/useMonth';
 import { useWallets } from '@/hooks/useWallets';
-import { useYearTransactions, YearTransaction } from '@/hooks/useYearTransactions';
+import { useYearTransactions } from '@/hooks/useYearTransactions';
 import { formatCurrency, getMonthNameShort } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -32,12 +32,39 @@ export default function YearOverviewPage() {
 
   const [expandAll, setExpandAll] = useState(false);
 
-  // Map group -> individual transactions for expanded view
-  const txnsByGroup = useMemo(() => {
-    const map = new Map<string, YearTransaction[]>();
+  interface TitleMonthAgg {
+    total: number;
+    allPaid: boolean;
+  }
+
+  // Aggregate transactions by title within each group for expanded view
+  const titleAggsByGroup = useMemo(() => {
+    const map = new Map<string, Map<string, Map<number, TitleMonthAgg>>>();
     for (const tx of transactions) {
-      if (!map.has(tx.group)) map.set(tx.group, []);
-      map.get(tx.group)!.push(tx);
+      const amount = tx.status === 'paid'
+        ? Number(tx.paid_amount ?? tx.expected_amount)
+        : Number(tx.expected_amount);
+
+      let titleMap = map.get(tx.group);
+      if (!titleMap) {
+        titleMap = new Map();
+        map.set(tx.group, titleMap);
+      }
+
+      let monthMap = titleMap.get(tx.title);
+      if (!monthMap) {
+        monthMap = new Map();
+        titleMap.set(tx.title, monthMap);
+      }
+
+      let agg = monthMap.get(tx.month);
+      if (!agg) {
+        agg = { total: 0, allPaid: true };
+        monthMap.set(tx.month, agg);
+      }
+
+      agg.total += amount;
+      if (tx.status !== 'paid') agg.allPaid = false;
     }
     return map;
   }, [transactions]);
@@ -210,27 +237,26 @@ export default function YearOverviewPage() {
                             {groupTotal > 0 ? formatCurrency(groupTotal) : '-'}
                           </td>
                         </tr>
-                        {/* Sub-rows: individual income transactions */}
-                        {expandAll && txnsByGroup.get(group)?.map((tx) => {
-                          const isPaid = tx.status === 'paid';
-                          const amount = isPaid ? (tx.paid_amount ?? tx.expected_amount) : tx.expected_amount;
+                        {/* Sub-rows: income aggregated by title */}
+                        {expandAll && titleAggsByGroup.get(group) && [...titleAggsByGroup.get(group)!.entries()].map(([title, monthMap]) => {
+                          let titleTotal = 0;
                           return (
-                            <tr key={tx.id} className="bg-emerald-50/20">
+                            <tr key={title} className="bg-emerald-50/20">
                               <td className="sticky left-0 bg-emerald-50/20 px-3 py-1 pl-8 text-xs text-muted-foreground/70 truncate max-w-[140px]">
-                                └─ {tx.title}
+                                └─ {title}
                               </td>
                               {MONTHS.map((m) => {
-                                if (m !== tx.month) {
-                                  return <td key={m} className="px-2 py-1 text-right text-xs text-muted-foreground/20">-</td>;
-                                }
+                                const agg = monthMap.get(m);
+                                if (!agg) return <td key={m} className="px-2 py-1 text-right text-xs text-muted-foreground/20">-</td>;
+                                titleTotal += agg.total;
                                 return (
-                                  <td key={m} className={`px-2 py-1 text-right tabular-nums text-xs ${isPaid ? 'text-emerald-600 line-through' : 'text-foreground/70'}`}>
-                                    {formatCurrency(amount)}
+                                  <td key={m} className={`px-2 py-1 text-right tabular-nums text-xs ${agg.allPaid ? 'text-emerald-600 line-through' : 'text-foreground/70'}`}>
+                                    {formatCurrency(agg.total)}
                                   </td>
                                 );
                               })}
                               <td className="px-3 py-1 text-right tabular-nums text-xs text-muted-foreground/70">
-                                {formatCurrency(amount)}
+                                {formatCurrency(titleTotal)}
                               </td>
                             </tr>
                           );
@@ -302,27 +328,26 @@ export default function YearOverviewPage() {
                             {groupTotal > 0 ? formatCurrency(groupTotal) : '-'}
                           </td>
                         </tr>
-                        {/* Sub-rows: individual expense transactions */}
-                        {expandAll && txnsByGroup.get(group)?.map((tx) => {
-                          const isPaid = tx.status === 'paid';
-                          const amount = isPaid ? (tx.paid_amount ?? tx.expected_amount) : tx.expected_amount;
+                        {/* Sub-rows: expenses aggregated by title */}
+                        {expandAll && titleAggsByGroup.get(group) && [...titleAggsByGroup.get(group)!.entries()].map(([title, monthMap]) => {
+                          let titleTotal = 0;
                           return (
-                            <tr key={tx.id} className="bg-card/40">
+                            <tr key={title} className="bg-card/40">
                               <td className="sticky left-0 bg-card/40 px-3 py-1 pl-8 text-xs text-muted-foreground/70 truncate max-w-[140px]">
-                                └─ {tx.title}
+                                └─ {title}
                               </td>
                               {MONTHS.map((m) => {
-                                if (m !== tx.month) {
-                                  return <td key={m} className="px-2 py-1 text-right text-xs text-muted-foreground/20">-</td>;
-                                }
+                                const agg = monthMap.get(m);
+                                if (!agg) return <td key={m} className="px-2 py-1 text-right text-xs text-muted-foreground/20">-</td>;
+                                titleTotal += agg.total;
                                 return (
-                                  <td key={m} className={`px-2 py-1 text-right tabular-nums text-xs ${isPaid ? 'text-red-500 line-through' : 'text-foreground/70'}`}>
-                                    {formatCurrency(amount)}
+                                  <td key={m} className={`px-2 py-1 text-right tabular-nums text-xs ${agg.allPaid ? 'text-red-500 line-through' : 'text-foreground/70'}`}>
+                                    {formatCurrency(agg.total)}
                                   </td>
                                 );
                               })}
                               <td className="px-3 py-1 text-right tabular-nums text-xs text-muted-foreground/70">
-                                {formatCurrency(amount)}
+                                {formatCurrency(titleTotal)}
                               </td>
                             </tr>
                           );
