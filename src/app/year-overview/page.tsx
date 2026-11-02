@@ -8,9 +8,10 @@ import { useMonth } from '@/hooks/useMonth';
 import { useWallets } from '@/hooks/useWallets';
 import { useYearTransactions } from '@/hooks/useYearTransactions';
 import { formatCurrency, getMonthNameShort } from '@/lib/utils';
+import { buildYearCsv, downloadCsv } from '@/lib/yearCsv';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, Download } from 'lucide-react';
 
 const MONTHS = Array.from({ length: 12 }, (_, i) => i + 1);
 
@@ -31,6 +32,20 @@ export default function YearOverviewPage() {
   } = useYearTransactions(selectedWallet?.id, year);
 
   const [expandAll, setExpandAll] = useState(false);
+
+  const handleExportCsv = () => {
+    const csv = buildYearCsv({
+      monthLabels: MONTHS.map((m) => getMonthNameShort(m)),
+      incomeGroups,
+      incomeMonthMap,
+      expenseGroups: groups,
+      expenseMonthMap: groupMonthMap,
+      monthlySummaries,
+      yearTotal,
+    });
+    const walletName = (selectedWallet?.name ?? 'carteira').replace(/[^\w-]+/g, '-');
+    downloadCsv(`visao-anual-${walletName}-${year}.csv`, csv);
+  };
 
   interface TitleMonthAgg {
     total: number;
@@ -167,8 +182,15 @@ export default function YearOverviewPage() {
               </Card>
             </div>
 
-            {/* Expand toggle */}
-            <div className="flex items-center justify-end">
+            {/* Export + expand toggle */}
+            <div className="flex items-center justify-between">
+              <button
+                onClick={handleExportCsv}
+                className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/30 hover:text-foreground transition-colors"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Exportar CSV
+              </button>
               <button
                 onClick={() => setExpandAll(!expandAll)}
                 className="inline-flex items-center gap-1.5 rounded-md border border-border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground hover:bg-muted/30 hover:text-foreground transition-colors"
