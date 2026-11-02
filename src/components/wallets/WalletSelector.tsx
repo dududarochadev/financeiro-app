@@ -1,6 +1,5 @@
 'use client';
 
-import { ChevronDown } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -35,18 +34,12 @@ export function WalletSelector({
         }
       }}
     >
-      <SelectTrigger className="w-auto max-w-[140px] border-0 bg-transparent p-0 text-sm font-medium shadow-none focus:ring-0 gap-1">
-        <span className="truncate flex items-center gap-1.5">
-          {selected && (
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: selected.color }}
-            />
-          )}
-          <span className="truncate">{selected?.name ?? 'Carteira'}</span>
-        </span>
-        <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
-      </SelectTrigger>
+      {/* Icon-only trigger — the chevron is rendered by SelectTrigger itself */}
+      <SelectTrigger
+        size="sm"
+        aria-label={selected ? `Carteira: ${selected.name}` : 'Selecionar carteira'}
+        className="w-8 shrink-0 justify-center gap-0 border-0 bg-transparent p-0 text-muted-foreground shadow-none hover:bg-muted hover:text-foreground focus:ring-0 dark:bg-transparent dark:hover:bg-muted/50"
+      />
       <SelectContent>
         {wallets.map((wallet) => (
           <SelectItem key={wallet.id} value={wallet.id}>
