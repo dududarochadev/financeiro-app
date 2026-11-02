@@ -3,6 +3,23 @@ import pool from '@/lib/db';
 import { NextResponse } from 'next/server';
 import type { RecurrenceEditScope } from '@/lib/types';
 
+/**
+ * Builds a multi-row INSERT. Column names are quoted because some of them
+ * ("group") are reserved keywords in PostgreSQL.
+ */
+function multiRowInsert(rows: Record<string, any>[]) {
+  const columns = Object.keys(rows[0]);
+  const cols = columns.map((c) => `"${c}"`).join(', ');
+  const placeholders = rows
+    .map((_, i) => '(' + columns.map((__, j) => `$${i * columns.length + j + 1}`).join(', ') + ')')
+    .join(', ');
+
+  return {
+    text: `INSERT INTO public.transactions (${cols}) VALUES ${placeholders}`,
+    values: rows.flatMap(Object.values),
+  };
+}
+
 export async function GET(request: Request) {
   const session = await auth();
   if (!session?.user?.id) {
@@ -46,11 +63,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const client = await pool.connect();
+
   try {
+    await client.query('BEGIN');
+
     const body = await request.json();
     const { wallet_id, type, title, description, expected_amount, paid_amount, status: txStatus, group, due_date, month, year, recurrence_type, recurrence_interval, recurrence_end_date, installment_current, installment_total } = body;
 
-    const insertResult = await pool.query(
+    const insertResult = await client.query(
       `INSERT INTO public.transactions (wallet_id, user_id, type, title, description, expected_amount, paid_amount, status, "group", due_date, month, year, recurrence_type, recurrence_interval, recurrence_end_date, installment_current, installment_total) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING *`,
       [wallet_id, session.user.id, type, title, description || null, expected_amount, paid_amount || null, txStatus || 'pending', group || 'Outros', due_date || null, month, year, recurrence_type || 'none', recurrence_interval || null, recurrence_end_date || null, installment_current || null, installment_total || null]
     );
@@ -69,6 +90,8 @@ export async function POST(request: Request) {
 
     if (recurrence_type === 'monthly' && !installment_total) {
       const endDate = recurrence_end_date ? new Date(recurrence_end_date) : null;
+      // Day-of-month taken from the "YYYY-MM-DD" string to avoid timezone shifts
+      const dueDay = due_date ? Number(due_date.slice(8, 10)) : 0;
       let occMonth = month + 1;
       let occYear = year;
       for (let i = 0; i < 60; i++) {
@@ -76,26 +99,30 @@ export async function POST(request: Request) {
         const occDate = new Date(occYear, occMonth - 1, 1);
         if (endDate && occDate > endDate) break;
         let occDueDate = null;
-        if (due_date) { const day = new Date(due_date).getDate(); occDueDate = `${occYear}-${String(occMonth).padStart(2,'0')}-${String(day).padStart(2,'0')}`; }
+        if (dueDay) {
+          // Clamp to the last day of the month (e.g. day 31 in February)
+          const lastDay = new Date(Date.UTC(occYear, occMonth, 0)).getUTCDate();
+          const day = Math.min(dueDay, lastDay);
+          occDueDate = `${occYear}-${String(occMonth).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        }
         occurrences.push({ wallet_id, user_id: session.user.id, type, title, expected_amount, status: 'pending', group: group || 'Outros', month: occMonth, year: occYear, recurrence_type: 'monthly', template_id: transaction.id, due_date: occDueDate });
         occMonth++;
       }
     }
 
     if (occurrences.length > 0) {
-      const cols = Object.keys(occurrences[0]).join(', ');
-      const valPlaceholders = occurrences.map((_, i) => {
-        const row = occurrences[i];
-        return '(' + Object.keys(row).map((_, j) => `$${i * Object.keys(row).length + j + 1}`).join(', ') + ')';
-      }).join(', ');
-      const flatValues = occurrences.flatMap(Object.values);
-      await pool.query(`INSERT INTO public.transactions (${cols}) VALUES ${valPlaceholders}`, flatValues);
+      const { text, values } = multiRowInsert(occurrences);
+      await client.query(text, values);
     }
 
+    await client.query('COMMIT');
     return NextResponse.json(transaction, { status: 201 });
   } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
     console.error('Error creating transaction:', err);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  } finally {
+    client.release();
   }
 }
 
@@ -229,13 +256,8 @@ export async function PATCH(request: Request) {
         }
 
         if (newRows.length > 0) {
-          const cols = Object.keys(newRows[0]).join(', ');
-          const valPlaceholders = newRows.map((_, i) => {
-            const row = newRows[i];
-            return '(' + Object.keys(row).map((_, j) => `$${i * Object.keys(row).length + j + 1}`).join(', ') + ')';
-          }).join(', ');
-          const flatValues = newRows.flatMap(Object.values);
-          await pool.query(`INSERT INTO public.transactions (${cols}) VALUES ${valPlaceholders}`, flatValues);
+          const { text, values } = multiRowInsert(newRows);
+          await pool.query(text, values);
         }
       }
 

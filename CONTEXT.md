@@ -248,5 +248,7 @@ TransactionForm (formMonth, formYear) → handleSubmit → TransactionInput { mo
 - **Excluir carteira**: hard-delete (`DELETE FROM`). Excluir transações não é cascata — precisa tratar separadamente
 - **Excluir transação**: soft-delete (`deleted_at = NOW()`). GET já filtra `deleted_at IS NULL`
 - **Recorrência mensal**: gera 60 ocorrências (5 anos). Sempre cria no futuro
+- **INSERT dinâmico**: colunas montadas a partir de `Object.keys(row)` DEVEM ser aspeadas — `group` é palavra reservada no PostgreSQL (`multiRowInsert()` em `api/transactions/route.ts` faz isso). Sem aspas o INSERT falha com `syntax error at or near "group"`
+- **Pai + filhos**: criar transação com ocorrências roda em `BEGIN`/`COMMIT` (client do pool). Falha no insert dos filhos não deixa mais linha pai órfã
 - **Parcelas**: `installment_current` começa em 1, incrementa a cada mês
 - **Formulário de transação**: quando edita (`transaction != null`), os selects de mês/ano NÃO resetam para os props — mantêm o valor da transação sendo editada
